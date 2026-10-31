@@ -204,18 +204,18 @@ export class World {
 
   // Loads tile `key` into `scene` and sets the environment from it (the
   // last tile loaded sets the light, ambient and fog). Returns setUpScene()'s
-  // result plus { key, tx, ty }.
+  // result plus { key, tx, ty, effects (how many effects it placed) }.
   async loadTile(scene, key, { env, onStatus = () => {}, ...options } = {}) {
     onStatus(`Loading tile ${key}…`);
     const { gltf, release } = await loadGlb(this.tileUrl(key), this.files);
     try {
       onStatus(`Preparing tile ${key}…`);
       const tile = await setUpScene(gltf, { env, ...options });
-      if (options.effects !== false) await this.placeEffects(gltf, tile, env);
+      const effects = options.effects !== false ? await this.placeEffects(gltf, tile, env) : 0;
       applySceneSettings(env, tile.settings, this.light);
       scene.add(tile.root);
       const [tx, ty] = parseTileKey(key);
-      return { ...tile, key, tx, ty };
+      return { ...tile, key, tx, ty, effects };
     } finally {
       release();
     }
