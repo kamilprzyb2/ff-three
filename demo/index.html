@@ -13,26 +13,23 @@
 <body>
 <header>
   <h1>ff-three</h1>
-  <p>FusionFall's shaders for three.js. Drop a GLB that UnityPackFF exported, or a folder with GLBs and the shared files they point to.</p>
+  <p>FusionFall's shaders for three.js, on the glTF files UnityPackFF exports.</p>
 </header>
 <main>
-  <section id="drop" class="drop" tabindex="0" aria-label="Drop files here">
-    <p><strong>Drop files or a folder here</strong>, or <label class="pick">choose files<input id="files" type="file" multiple hidden></label> / <label class="pick">a folder<input id="folder" type="file" webkitdirectory hidden></label>.</p>
-    <p class="hint">Models: a prefab's GLB (with <code>--split-clips</code>, its <code>@clip</code> files too). World tiles: <code>tile/XX_YY.glb</code> with <code>shared/</code>, and <code>sky/</code> for the skybox.</p>
-  </section>
-  <section id="served" class="served" hidden>
-    <h2>On this server</h2>
-    <div id="worlds"></div>
-    <div class="models-head"><h3>Models</h3><input id="filter" class="ff-input" type="search" placeholder="Search models (e.g. grim, nano_, fusion)" aria-label="Search models"></div>
-    <div id="models"></div>
-  </section>
   <section class="viewer" aria-live="polite">
-    <div class="bar">
-      <label>File <select id="pick" class="ff-input" disabled><option>Nothing loaded</option></select></label>
-      <span id="status" class="status"></span>
+    <div id="picker" class="bar picker" hidden>
+      <label>Source <select id="source" class="ff-input"></select></label>
+      <label>Kind <select id="kind" class="ff-input"></select></label>
+      <label class="grow">Item <select id="item" class="ff-input"></select></label>
+      <input id="filter" class="ff-input" type="search" placeholder="Filter items" aria-label="Filter items">
     </div>
+    <div class="bar"><span id="status" class="status">Pick something above, or drop files below.</span></div>
     <div id="stage" class="stage"></div>
     <div id="controls" class="controls"></div>
+  </section>
+  <section id="drop" class="drop" tabindex="0" aria-label="Drop files here">
+    <p><strong>Drop files or a folder here</strong>, or <label class="pick">choose files<input id="files" type="file" multiple hidden></label> / <label class="pick">a folder<input id="folder" type="file" webkitdirectory hidden></label>, from your own machine.</p>
+    <p class="hint">Models: a prefab's GLB (with <code>--split-clips</code>, its <code>@clip</code> files too). World tiles: <code>tile/XX_YY.glb</code> with <code>shared/</code>, and <code>sky/</code> for the skybox.</p>
   </section>
 </main>
 <script type="module" src="demo.js"></script>
