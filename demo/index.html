@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ff-three demo</title>
+<link rel="stylesheet" href="style.css">
+<!-- three comes from /three/ (cli/serve.mjs serves it); change the map to load it from elsewhere -->
+<script type="importmap">
+{ "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header>
+  <h1>ff-three</h1>
+  <p>FusionFall's shaders for three.js. Drop a GLB that UnityPackFF exported, or a folder with GLBs and the shared files they point to.</p>
+</header>
+<main>
+  <section id="drop" class="drop" tabindex="0" aria-label="Drop files here">
+    <p><strong>Drop files or a folder here</strong>, or <label class="pick">choose files<input id="files" type="file" multiple hidden></label> / <label class="pick">a folder<input id="folder" type="file" webkitdirectory hidden></label>.</p>
+    <p class="hint">Models: a prefab's GLB (with <code>--split-clips</code>, its <code>@clip</code> files too). World tiles: <code>tile/XX_YY.glb</code> with <code>shared/</code>, and <code>sky/</code> for the skybox.</p>
+  </section>
+  <section class="viewer" aria-live="polite">
+    <div class="bar">
+      <label>File <select id="pick" class="ff-input" disabled><option>Nothing loaded</option></select></label>
+      <span id="status" class="status"></span>
+    </div>
+    <div id="stage" class="stage"></div>
+    <div id="controls" class="controls"></div>
+  </section>
+</main>
+<script type="module" src="demo.js"></script>
+</body>
+</html>
