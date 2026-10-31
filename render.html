@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ff-three render</title>
+<style>html, body { margin: 0; background: transparent; overflow: hidden; }</style>
+<!-- cli/render.mjs serves this package at /, three at /three/ and the world at /world/ -->
+<script type="importmap">
+{ "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<script type="module">
+// Runs one job (src/render.js) from ?job=<JSON>&world=<URL>, then leaves
+// the picture as a PNG data URL in window.__png (or the error in
+// window.__err) and sets window.__done.
+import { World } from "./src/world.js";
+import { renderJob } from "./src/render.js";
+
+const q = new URLSearchParams(location.search);
+try {
+  const world = await World.open(q.get("world") || "/world/");
+  const renderer = await renderJob(world, JSON.parse(q.get("job")));
+  document.body.append(renderer.domElement);
+  window.__png = renderer.domElement.toDataURL("image/png");
+  renderer.dispose();
+} catch (e) {
+  window.__err = String((e && e.stack) || e);
+}
+window.__done = true;
+</script>
+</body>
+</html>
