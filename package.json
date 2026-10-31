@@ -1,0 +1,41 @@
+{
+  "name": "ff-three",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FusionFall's shaders for three.js, a model viewer, an area viewer and a headless render CLI, for the glTF files UnityPackFF writes",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./png": "./src/png.js",
+    "./shader-name": "./src/shader-name.js",
+    "./materials": "./src/materials.js",
+    "./world": "./src/world.js",
+    "./model-viewer": "./src/model-viewer.js",
+    "./area-viewer": "./src/area-viewer.js",
+    "./render": "./src/render.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "ff-three-render": "./cli/render.mjs"
+  },
+  "files": [
+    "src",
+    "cli",
+    "render.html",
+    "demo",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "demo": "node cli/serve.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "three": ">=0.180.0 <0.190.0"
+  },
+  "devDependencies": {
+    "three": "0.186.0"
+  }
+}
