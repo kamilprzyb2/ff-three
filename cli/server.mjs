@@ -54,11 +54,18 @@ export const DEFAULT_MOUNTS = () => ({
 
 // Starts serving; resolves to { server, url }. `mounts`: { "/prefix/": dir }
 // (or { "/name": file }) added to DEFAULT_MOUNTS. "/" redirects to /demo/.
-export function serve(mounts = {}, { host = "127.0.0.1", port = 0 } = {}) {
+// `routes`: { "/path": () => value } served as JSON.
+export function serve(mounts = {}, { host = "127.0.0.1", port = 0, routes = {} } = {}) {
   const all = { ...DEFAULT_MOUNTS(), ...mounts };
   const server = http.createServer((req, res) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
       res.writeHead(405).end();
+      return;
+    }
+    const route = routes[req.url.split("?")[0]];
+    if (route) {
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-cache" });
+      res.end(req.method === "HEAD" ? undefined : JSON.stringify(route()));
       return;
     }
     if (req.url === "/") {

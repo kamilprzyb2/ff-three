@@ -72,3 +72,29 @@ test("the server stays inside its mounts", () => {
   assert.equal(resolvePath(mounts, "/elsewhere"), null);
   assert.equal(resolvePath(mounts, "/world/%zz"), null);
 });
+
+test("the demo server lists models and worlds with their named areas", async () => {
+  const { indexFiles } = await import("../cli/serve.mjs");
+  const root = tmp();
+  const put = (rel, text = "") => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  put("loose/grim.glb"); put("loose/grim@stand1.glb");
+  put("pack/models/manifest.json", "{}"); put("pack/models/mob/drum/drum.glb"); put("pack/models/mob/drum/clips/run.glb"); put("pack/models/shared/abc.bin");
+  put("pack/avatar/manifest.json", "{}"); put("pack/avatar/wear/hat/hat.glb");
+  put("pack/world/tile/04_02.glb"); put("pack/world/tile/03_01.glb"); put("pack/world/shared/x.png");
+  put("pack/base/areas.json", JSON.stringify([
+    { name: "Orchid Bay", zone: "Downtown", x: 1536, y: 512, width: 512, height: 512 },
+    { name: "Orchid Bay", zone: "Downtown", x: 2048, y: 1024, width: 512, height: 512 },
+    { name: "Elsewhere", zone: "Nowhere", x: 7680, y: 7680, width: 512, height: 512 },
+  ]));
+  const index = indexFiles(root, "/files/");
+  assert.deepEqual(index.models.map((m) => [m.url, m.group, m.name, m.clips]), [
+    ["/files/loose/grim.glb", "loose", "grim.glb", null],
+    ["/files/pack/avatar/wear/hat/hat.glb", "pack/avatar/wear", "hat/hat.glb", null],
+    ["/files/pack/models/mob/drum/drum.glb", "pack/models/mob", "drum/drum.glb", "pack"],
+  ]);
+  assert.equal(index.worlds.length, 1);
+  assert.equal(index.worlds[0].url, "/files/pack/world/");
+  assert.deepEqual(index.worlds[0].tiles.sort(), ["03_01", "04_02"]);
+  // two rectangles, one area; areas without a tile here are left out
+  assert.deepEqual(index.worlds[0].areas, [{ name: "Orchid Bay", zone: "Downtown", area: [3, 1, 4, 2] }]);
+});

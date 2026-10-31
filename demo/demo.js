@@ -146,3 +146,71 @@ if (q.get("model")) {
   mountArea(stage, q.get("world"), { area, tiles: q.get("ring") === "0" ? undefined : areaTiles(area, 1), sky: q.get("sky") || undefined }, { controls, onStatus: status })
     .then((v) => { current = window.ffViewer = v; status(`Area ${area.join(",")}`); }, (e) => status(String(e)));
 }
+
+// What the server has (cli/serve.mjs --dir): links to every world's named
+// areas and tiles, and every model, searchable. Shown when the page opens
+// without ?model or ?world.
+function link(text, href, title) {
+  return Object.assign(document.createElement("a"), { textContent: text, href, title: title || "" });
+}
+
+function details(summary, fill) {
+  const d = document.createElement("details");
+  d.append(Object.assign(document.createElement("summary"), { innerHTML: summary }));
+  const box = Object.assign(document.createElement("div"), { className: "links" });
+  d.append(box);
+  d.addEventListener("toggle", () => { if (d.open && !box.childElementCount) fill(box); });
+  return d;
+}
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const modelHref = (m) => `?model=${encodeURIComponent(m.url)}${m.clips === "pack" ? "&clips=pack" : ""}`;
+
+async function listServed() {
+  let index;
+  try {
+    const r = await fetch("files.json");
+    if (!r.ok) return;
+    index = await r.json();
+  } catch {
+    return;
+  }
+  if (!index.worlds.length && !index.models.length) return;
+  $("served").hidden = false;
+  const worlds = $("worlds");
+  if (index.worlds.length) worlds.append(Object.assign(document.createElement("h3"), { textContent: "Worlds" }));
+  for (const w of index.worlds) {
+    const href = (area) => `?world=${encodeURIComponent(w.url)}&area=${area.join(",")}`;
+    worlds.append(details(`${esc(w.url)} <small>${w.areas.length} named areas, ${w.tiles.length} tiles</small>`, (box) => {
+      const areas = [...w.areas].sort((a, b) => (a.zone || "").localeCompare(b.zone || "") || a.name.localeCompare(b.name));
+      for (const a of areas) box.append(link(a.name, href(a.area), `${a.zone || ""} · tiles ${a.area.join(",")}`));
+      for (const t of w.tiles) {
+        const [tx, ty] = t.split("_").map(Number);
+        box.append(link(`tile ${t}`, href([tx, ty, tx, ty])));
+      }
+    }));
+  }
+  const groups = new Map();
+  for (const m of index.models) {
+    if (!groups.has(m.group)) groups.set(m.group, []);
+    groups.get(m.group).push(m);
+  }
+  const box = $("models");
+  const show = () => {
+    const q = $("filter").value.trim().toLowerCase();
+    box.replaceChildren();
+    if (q) {
+      const hits = index.models.filter((m) => (m.group + "/" + m.name).toLowerCase().includes(q));
+      const list = Object.assign(document.createElement("div"), { className: "links" });
+      for (const m of hits.slice(0, 300)) list.append(link(m.name, modelHref(m), m.group));
+      box.append(Object.assign(document.createElement("p"), { className: "muted", textContent: `${hits.length} match${hits.length === 1 ? "" : "es"}${hits.length > 300 ? ", the first 300 shown" : ""}` }), list);
+      return;
+    }
+    for (const [group, list] of groups) {
+      box.append(details(`${esc(group || "(top)")} <small>${list.length}</small>`, (b) => { for (const m of list) b.append(link(m.name, modelHref(m))); }));
+    }
+  };
+  $("filter").addEventListener("input", show);
+  show();
+}
+if (!q.get("model") && !q.get("world")) listServed();
