@@ -44,7 +44,7 @@ viewer.dispose(); // frees the GPU resources
 
 Lower down, `dress(root, parser, { env })` swaps the materials of any glTF scene GLTFLoader loaded, `World` loads tiles into your own scene, and `createEnvironment()` holds the light, fog and time every material reads. `src/index.js` lists every export.
 
-`mountModel` options: `controls`, `kind` (`"player"`, `"creature"` or `"item"`: how it's framed), `menu` (picker groups, `[{ title, hide_weapon, clips: [{ clip, label, icon, then }] }]`), `idles` (a human NPC's idle clips), `clipUrl(name)`, `iconUrl(icon)`, `weapon`, `loader`. Each can also come from the GLB's root `extras`.
+`mountModel` options: `controls`, `kind` (`"player"`, `"creature"` or `"item"`: how it's framed), `clips` (`{ name: url }`, as an ff-unpack manifest lists a prefab's clips), `menu` (picker groups, `[{ title, hide_weapon, clips: [{ clip, label, icon, then }] }]`), `idles` (a human NPC's idle clips), `clipUrl(name)`, `iconUrl(icon)`, `weapon`, `loader`. Each can also come from the GLB's root `extras`. Clips are looked for in the GLB, then in `clips`, then beside it as UnityPackFF's `--split-clips` names them (`<model>@<clip>.glb`); for an ff-unpack pack without its manifest at hand, pass `clipUrl: (name) => packClipUrl(url, name)` (`<prefab>/clips/<clip>.glb`).
 
 ## Render CLI
 

@@ -6,7 +6,7 @@ import { scatter, random } from "../src/grass.js";
 import { uniformOf, sample } from "../src/animation.js";
 import { skySetAt } from "../src/sky.js";
 import { tileOrigin } from "../src/world.js";
-import { splitClipUrl, animationClipNames } from "../src/model-viewer.js";
+import { splitClipUrl, packClipUrl, animationClipNames } from "../src/model-viewer.js";
 
 // A terrain grid as UnityPackFF writes one: vertex z·W + x, x mirrored,
 // uv = (x, z) / size with v flipped; heights rise along z; vertex `shifted`
@@ -81,6 +81,8 @@ test("world positions", () => {
 test("split clips sit beside their model", () => {
   assert.equal(splitClipUrl("/m/mob_drum.kfm.glb", "stand1"), "/m/mob_drum.kfm@stand1.glb");
   assert.equal(splitClipUrl("/m/x.glb?v=2", "a b"), "/m/x@a_b.glb?v=2");
+  assert.equal(packClipUrl("/models/mob/mob_drum/default.glb", "stand1"), "/models/mob/mob_drum/clips/stand1.glb");
+  assert.equal(packClipUrl("/a/b/c.glb?v=1", "x y"), "/a/b/clips/x%20y.glb?v=1");
   const json = { nodes: [{}, { extras: { animation: { clips: [{ name: "nif-default" }, { name: "stand1" }, { name: null }, { name: "run" }] } } }] };
   assert.deepEqual(animationClipNames(json), ["stand1", "run"]);
 });

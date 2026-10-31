@@ -1,10 +1,11 @@
 // The demo page: drop UnityPackFF GLBs (and the files they point to) and
-// see them with FusionFall's shaders. ?model=<url> opens a model and
+// see them with FusionFall's shaders. ?model=<url> opens a model (add
+// &clips=pack for a model in an ff-unpack pack) and
 // ?world=<url>&area=tx0,ty0,tx1,ty1 an area of a world directory, from a
 // server (cli/serve.mjs --dir <dir> serves <dir> at /files/).
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { mountModel } from "../src/model-viewer.js";
+import { mountModel, packClipUrl } from "../src/model-viewer.js";
 import { mountArea } from "../src/area-viewer.js";
 import { World, createFiles } from "../src/world.js";
 import { tileKey, areaTiles } from "../src/jobs.js";
@@ -137,7 +138,9 @@ for (const id of ["files", "folder"]) {
 const q = new URLSearchParams(location.search);
 if (q.get("model")) {
   status("Loading…");
-  mountModel(stage, q.get("model"), { controls }).then((v) => { current = window.ffViewer = v; status(q.get("model")); }, (e) => status(String(e)));
+  // &clips=pack: an ff-unpack pack's layout (<prefab>/clips/<clip>.glb)
+  const options = q.get("clips") === "pack" ? { clipUrl: (name) => packClipUrl(q.get("model"), name) } : {};
+  mountModel(stage, q.get("model"), { controls, ...options }).then((v) => { current = window.ffViewer = v; status(q.get("model")); }, (e) => status(String(e)));
 } else if (q.get("world") && q.get("area")) {
   const area = q.get("area").split(",").map(Number);
   mountArea(stage, q.get("world"), { area, tiles: q.get("ring") === "0" ? undefined : areaTiles(area, 1), sky: q.get("sky") || undefined }, { controls, onStatus: status })

@@ -30,6 +30,14 @@ export function splitClipUrl(modelUrl, clip) {
   return `${stem}@${clip.replace(/[^\w.@-]/g, "_")}.glb${i >= 0 ? modelUrl.slice(i + 4) : ""}`;
 }
 
+// The URL of a clip in an ff-unpack pack: <prefab>/clips/<clip>.glb beside
+// <prefab>/<variant>.glb (its manifest lists them too).
+export function packClipUrl(modelUrl, clip) {
+  const q = modelUrl.indexOf("?");
+  const path = q >= 0 ? modelUrl.slice(0, q) : modelUrl;
+  return `${path.slice(0, path.lastIndexOf("/") + 1)}clips/${encodeURIComponent(clip)}.glb${q >= 0 ? modelUrl.slice(q) : ""}`;
+}
+
 // The clips the model's Animation lists, in order (names), from the
 // extras.animation of its first node that has one.
 export function animationClipNames(json) {
@@ -183,7 +191,11 @@ function picker(box, menu, iconUrl, on) {
 //              or player for ActorSkinCombiner rigs)
 //   menu       the picker's groups (default: the model's clips, one group)
 //   idles      human NPCs' idle clips
-//   clipUrl    name → URL of a split clip (default: splitClipUrl)
+//   clips      { name: URL } of its clips (an ff-unpack manifest's, relative
+//              to the model); without it, the clips the GLB holds or its
+//              Animation lists
+//   clipUrl    name → URL of a clip file (default: from `clips`, else
+//              splitClipUrl; packClipUrl for an ff-unpack pack)
 //   iconUrl    icon → URL for the menu's emote icons
 //   weapon     lay a tall item on its side (weapons hang pointing down)
 //   loader     a GLTFLoader to use (one with a LoadingManager for dropped files)
@@ -211,8 +223,9 @@ export async function mountModel(stage, url, options = {}) {
   const objectOf = (i) => objects.get(i) || null;
   const json = gltf.parser.json;
   const own = new Map((json.animations || []).map((a, i) => [a.name, i]).filter(([n]) => n !== BIND_POSE_CLIP));
-  const names = own.size ? [...own.keys()] : animationClipNames(json);
-  const clipUrl = info.clipUrl || ((name) => splitClipUrl(base, name));
+  const listed = info.clips ? Object.keys(info.clips).filter((n) => n !== BIND_POSE_CLIP) : null;
+  const names = own.size ? [...own.keys()] : listed || animationClipNames(json);
+  const clipUrl = info.clipUrl || (info.clips ? (name) => info.clips[name] : (name) => splitClipUrl(base, name));
   const loaded = new Map();
   function getClip(name) {
     if (!loaded.has(name)) {
