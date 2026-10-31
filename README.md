@@ -1,12 +1,12 @@
 # ff-three
 
-FusionFall's shaders for [three.js](https://threejs.org), for the glTF files [UnityPackFF](https://github.com/kamilprzyb2/UnityPackFF) exports from the game client. It has:
+FusionFall's shaders for [three.js](https://threejs.org), for the glTF files [UnityPackFF](https://github.com/kamilprzyb2/UnityPackFF) (my fork of [dongresource/UnityPackFF](https://github.com/dongresource/UnityPackFF)) exports from the game client. It has:
 
 - **Materials** that draw like the client: the fixed-function prop shaders (`normal_*`), toon shading with outlines, the face decal, the fusions' moving skin, water, terrain splat passes, the skybox and grass. They are picked by the shader name UnityPackFF keeps in each material's `extras`.
 - **A model viewer** for characters, mobs, NPCs, nanos and items, with the game's idle cycle and a picker for every clip.
 - **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, grass near the camera, and, from the scene's scripts, the Infected Zones' moving platforms and barrier effects ([docs/SCRIPTS.md](docs/SCRIPTS.md)).
 - **A render CLI** that draws tiles from above and areas at an angle in headless Chromium, once, for pages that show pictures.
-- **A demo page** where you drop in a GLB, or a folder of them.
+- **A demo page** that picks models and areas from a folder of UnityPackFF output or ff-unpack packs, or shows GLBs you drop on it.
 
 ff-three needs only the client's data, through UnityPackFF. Nothing here is game art: you export your own from your own client files.
 
@@ -15,7 +15,7 @@ ff-three needs only the client's data, through UnityPackFF. Nothing here is game
 Any GLB that UnityPackFF writes (`bin/export_gltf.py`, or its `GLTFWriter`):
 
 - **Models**: a prefab's GLB. With `--split-clips`, the clips sit beside it as `<model>@<clip>.glb` and the viewer loads each one when it's picked.
-- **World tiles**: a map scene (`BuildPlayer-Map_XX_YY`) exported whole, at its world position. The area viewer and the render CLI read a world directory laid out as ff-unpack writes it (`tile/`, `shared/`, `sky/`, `manifest.json`). [docs/WORLD_INPUT.md](docs/WORLD_INPUT.md) lists what ff-three reads.
+- **World tiles**: a map scene (`BuildPlayer-Map_XX_YY`) exported whole, at its world position. The area viewer and the render CLI read a world directory laid out as ff-unpack writes it (`tile/`, `shared/`, `effect/`, `sky/`, `manifest.json`). [docs/WORLD_INPUT.md](docs/WORLD_INPUT.md) lists what ff-three reads.
 
 UnityPackFF keeps each Unity material whole in the glTF material's `extras` (`shader`, `colors`, `floats`, `textures` with glTF texture indices). [docs/SHADERS.md](docs/SHADERS.md) describes each shader family and which properties it reads.
 
@@ -67,7 +67,7 @@ It needs Node 22 or later and a Chromium binary (`--chrome` or `$CHROME`; a head
 
 Each job writes `<out>/<name>.png`. `<out>/renders.json` records each job with a key made of the job, ff-three's version and the world's fingerprint (`manifest.json`'s `fingerprint`). A job whose picture exists under the same key is skipped, so an interrupted run resumes and only changed jobs are redone (`--force` redoes everything). Jobs that fail are retried with one browser: software GL sometimes loses its context when several browsers run at once.
 
-The renders are made once, never on request: an area view takes 5 to 45 s in software GL.
+Rendering in software GL is slow, so make the pictures once and serve them, rather than rendering on request.
 
 ## Demo
 
@@ -87,6 +87,6 @@ node dev/shot.mjs --dir <files> --page "/demo/?model=/files/x.glb" --out shot.pn
 
 The tests make their own data (`test/helpers.js`): no game files are needed or committed.
 
-## Status
+## Licence
 
-Version 0.1.0, unreleased. The licence and the package name aren't decided yet.
+MIT, see [LICENSE](LICENSE). FusionFall's art, sound and code belong to their owners: ff-three contains none of it, and the files you unpack from your own client stay yours to keep out of version control.

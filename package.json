@@ -1,8 +1,24 @@
 {
   "name": "ff-three",
   "version": "0.1.0",
-  "private": true,
   "description": "FusionFall's shaders for three.js, a model viewer, an area viewer and a headless render CLI, for the glTF files UnityPackFF writes",
+  "keywords": [
+    "fusionfall",
+    "three.js",
+    "gltf",
+    "unity",
+    "shaders"
+  ],
+  "homepage": "https://github.com/kamilprzyb2/ff-three#readme",
+  "bugs": {
+    "url": "https://github.com/kamilprzyb2/ff-three/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kamilprzyb2/ff-three.git"
+  },
+  "license": "MIT",
+  "author": "Kamil Przybylski",
   "type": "module",
   "exports": {
     ".": "./src/index.js",

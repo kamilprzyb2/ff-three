@@ -56,7 +56,7 @@ The ramp is `_ShaderMap` (`ToonRamp9`, 256 × 2, three steps), read at v = 0.75 
 - `_MainTex` scrolls along v by t, `_BumpMap` (bubbles) the other way, `_ShaderMap` (glow) is looked up by the projected normal, offset by t
 - colour = `_MainTex` × primary × 2 + bubbles + glow, each step clamped; alpha = texture alpha × primary alpha
 
-In the model viewer the light stays fixed on screen (upper left, in front), as in the portal's portraits.
+In the model viewer the light stays fixed on screen: upper left, in front.
 
 ## Water (`ffWater`, `ffPoison`)
 

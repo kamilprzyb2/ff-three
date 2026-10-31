@@ -7,6 +7,7 @@ The area viewer (`mountArea`), `World` and the render CLI read a world directory
   manifest.json                    optional
   tile/<XX_YY>.glb                 required for every tile shown
   shared/…                         whatever the tiles point to
+  effect/<name>.glb                optional: the effect prefabs the tiles' scripts place
   sky/<set>/skybox_<side>tex.png   optional (no skybox without it)
 ```
 

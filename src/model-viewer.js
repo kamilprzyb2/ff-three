@@ -185,8 +185,7 @@ function picker(box, menu, iconUrl, on) {
 
 // Mounts the viewer for the GLB at `url` in `stage` (an element; its
 // controls go in options.controls) and resolves to { dispose, gltf }.
-// Options (each also read from the GLB's root extras, which the portal's
-// avatar builder writes):
+// Options (each can also come from the GLB's root extras):
 //   kind       "player" | "creature" | "item" (framing; default: creature,
 //              or player for ActorSkinCombiner rigs)
 //   menu       the picker's groups (default: the model's clips, one group)
