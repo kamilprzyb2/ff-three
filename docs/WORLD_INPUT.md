@@ -30,6 +30,7 @@ All optional:
 | Field | Used for |
 |---|---|
 | `tiles` | which tiles exist (an object keyed by `XX_YY`, or a list); a view's ring tiles that aren't there are sea. Without it, every tile is tried and missing ones are skipped |
+| `partial` | `true` for a pack of only some tiles (ff-unpack `--tiles`): tiles it lacks aren't drawn as sea, since they may be land |
 | `light` | `{ "direction": [x, y, z], "color": [r, g, b], "intensity": n }`, towards the light, glTF space. Default: main.unity3d's light of the three builds, `[0.8937, 0.309, 0.3253]`, white, 1 |
 | `sky.fusion_rects` | `[[x, y, width, height], …]` in map metres (x east, y north): where the area viewer uses the fusion sky by default |
 | `effects` | `{ name: { file } }`: the effect prefabs the tiles' scripts place, `file` relative to the world directory (`effect/<name>.glb`); `name` is the prefab's name in lower case, as the scripts' `nifObject` names it |

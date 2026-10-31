@@ -127,8 +127,8 @@ export async function renderJob(world, job, { onStatus = () => {} } = {}) {
   const [x0, x1, , z1] = areaBounds(j.area);
   env.fogDensity.value = 0.65 / camera.position.distanceTo(new THREE.Vector3((x0 + x1) / 2, ground, z1));
   env.time.value = 0;
-  const surroundings = createSurroundings(loaded, env);
-  scene.add(surroundings);
+  // the sea beyond the tiles, unless the pack has only some (a missing tile may be land)
+  if (!world.partial) scene.add(createSurroundings(loaded, env));
   const sky = await world.sky(j.sky, areaTilesLoaded[areaTilesLoaded.length - 1].settings);
   sky.position.copy(camera.position);
   sky.scale.setScalar(camera.far * 0.5);

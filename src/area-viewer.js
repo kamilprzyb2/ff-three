@@ -44,8 +44,8 @@ export async function mountArea(stage, world, spec, { controls = null, pitch = 2
     if (!disposed) throw new Error("no tile of the area loaded");
     return { dispose() {} };
   }
-  const surroundings = createSurroundings(tiles, env);
-  scene.add(surroundings);
+  // the sea beyond the tiles, unless the pack has only some (a missing tile may be land)
+  if (!world.partial) scene.add(createSurroundings(tiles, env));
   const settings = tiles[tiles.length - 1].settings;
   const skySet = spec.sky || skySetAt((x0 + x1) / 2, (z0 + z1) / 2, world.fusionRects);
   let sky = null;

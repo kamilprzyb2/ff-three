@@ -63,7 +63,7 @@ It needs Node 22 or later and a Chromium binary (`--chrome` or `$CHROME`; a head
 ```
 
 - `topdown`: a tile straight down, orthographic, north up and east right, no fog or sky, transparent where nothing is drawn.
-- `view`: an area's tiles (`[tx0, ty0, tx1, ty1]`) seen from the south at `pitch` degrees, the camera backed off until they all fit. `tiles` lists the tiles to load (default: the area and the ring around it; tiles the world doesn't have are sea).
+- `view`: an area's tiles (`[tx0, ty0, tx1, ty1]`) seen from the south at `pitch` degrees, the camera backed off until they all fit. `tiles` lists the tiles to load (default: the area and the ring around it; tiles the world doesn't have are sea, unless its manifest marks it `partial`).
 
 Each job writes `<out>/<name>.png`. `<out>/renders.json` records each job with a key made of the job, ff-three's version and the world's fingerprint (`manifest.json`'s `fingerprint`). A job whose picture exists under the same key is skipped, so an interrupted run resumes and only changed jobs are redone (`--force` redoes everything). Jobs that fail are retried with one browser: software GL sometimes loses its context when several browsers run at once.
 

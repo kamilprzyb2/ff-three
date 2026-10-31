@@ -192,6 +192,9 @@ export class World {
   tileUrl(key) { return `${this.base}tile/${key}.glb`; }
   skyDir(set) { return `${this.base}sky/${set}`; }
   get light() { return (this.manifest && this.manifest.light) || null; }
+  // A pack of only some tiles (ff-unpack --tiles): a tile it lacks may be
+  // land, so nothing is drawn as sea around them.
+  get partial() { return !!(this.manifest && this.manifest.partial); }
   get fusionRects() { return (this.manifest && this.manifest.sky && this.manifest.sky.fusion_rects) || []; }
   hasTile(key) {
     const tiles = this.manifest && this.manifest.tiles;
