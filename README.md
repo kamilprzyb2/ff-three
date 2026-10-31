@@ -4,7 +4,7 @@ FusionFall's shaders for [three.js](https://threejs.org), for the glTF files [Un
 
 - **Materials** that draw like the client: the fixed-function prop shaders (`normal_*`), toon shading with outlines, the face decal, the fusions' moving skin, water, terrain splat passes, the skybox and grass. They are picked by the shader name UnityPackFF keeps in each material's `extras`.
 - **A model viewer** for characters, mobs, NPCs, nanos and items, with the game's idle cycle and a picker for every clip.
-- **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, and grass near the camera.
+- **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, grass near the camera, and, from the scene's scripts, the Infected Zones' moving platforms and barrier effects ([docs/SCRIPTS.md](docs/SCRIPTS.md)).
 - **A render CLI** that draws tiles from above and areas at an angle in headless Chromium, once, for pages that show pictures.
 - **A demo page** where you drop in a GLB, or a folder of them.
 
@@ -63,7 +63,7 @@ It needs Node 22 or later and a Chromium binary (`--chrome` or `$CHROME`; a head
 ```
 
 - `topdown`: a tile straight down, orthographic, north up and east right, no fog or sky, transparent where nothing is drawn.
-- `view`: an area's tiles (`[tx0, ty0, tx1, ty1]`) seen from the south at `pitch` degrees, the camera backed off until they all fit. `tiles` lists the tiles to load (default: the area and the ring around it; tiles the world doesn't have are sea).
+- `view`: an area's tiles (`[tx0, ty0, tx1, ty1]`) seen from the south at `pitch` degrees, the camera backed off until they all fit. `tiles` lists the tiles to load (default: the area and the ring around it; tiles the world doesn't have are sea, unless its manifest marks it `partial`).
 
 Each job writes `<out>/<name>.png`. `<out>/renders.json` records each job with a key made of the job, ff-three's version and the world's fingerprint (`manifest.json`'s `fingerprint`). A job whose picture exists under the same key is skipped, so an interrupted run resumes and only changed jobs are redone (`--force` redoes everything). Jobs that fail are retried with one browser: software GL sometimes loses its context when several browsers run at once.
 

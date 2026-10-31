@@ -17,6 +17,7 @@ import { terrainMaterial, terrainHeights } from "./terrain.js";
 import { grassFor } from "./grass.js";
 import { playAnimations } from "./animation.js";
 import { createSky } from "./sky.js";
+import { startPlatforms, effectPlacements } from "./scripts.js";
 import { TILE_SIZE, tileKey, parseTileKey } from "./jobs.js";
 
 export { TILE_SIZE, tileKey, parseTileKey };
@@ -131,15 +132,40 @@ export async function setUpScene(gltf, { env, grass = true, grassDistance = 80, 
       return terrain.localToWorld(v.set(v.x, y, v.z)).y;
     };
   }
-  const animations = animate ? await playAnimations(gltf, dressing) : null;
+  const animations = animate ? combine(await playAnimations(gltf, dressing), startPlatforms(gltf)) : null;
+  const extra = []; // what's added later (effects), disposed with the scene
   return {
     root, settings, terrain, heightAt, animations, dressing,
+    // Adds a scene (setUpScene()'s result) to this one's animation and disposal.
+    adopt(child) {
+      extra.push(child);
+      if (animations && child.animations) animations.add(child.animations);
+    },
     dispose() {
       if (animations) animations.stop();
+      for (const c of extra) c.dispose();
       dressing.dispose();
       for (const o of owned) o.dispose();
       root.traverse((o) => { if (o.geometry && !o.geometry.isInstancedBufferGeometry) o.geometry.dispose(); });
     },
+  };
+}
+
+// Clip players and platforms as one: { playing, update(dt), add(other),
+// stop() }. Platforms take the time since the start (startPlatforms()).
+function combine(clips, platforms) {
+  const parts = [clips];
+  let time = 0;
+  return {
+    get playing() { return parts.reduce((n, p) => n + (p.playing || 0), 0) + platforms.count; },
+    platforms: platforms.count,
+    update(dt) {
+      time += dt;
+      for (const p of parts) p.update(dt);
+      platforms.update(time);
+    },
+    add(other) { parts.push(other); },
+    stop() { for (const p of parts) p.stop(); },
   };
 }
 
@@ -166,6 +192,9 @@ export class World {
   tileUrl(key) { return `${this.base}tile/${key}.glb`; }
   skyDir(set) { return `${this.base}sky/${set}`; }
   get light() { return (this.manifest && this.manifest.light) || null; }
+  // A pack of only some tiles (ff-unpack --tiles): a tile it lacks may be
+  // land, so nothing is drawn as sea around them.
+  get partial() { return !!(this.manifest && this.manifest.partial); }
   get fusionRects() { return (this.manifest && this.manifest.sky && this.manifest.sky.fusion_rects) || []; }
   hasTile(key) {
     const tiles = this.manifest && this.manifest.tiles;
@@ -175,20 +204,48 @@ export class World {
 
   // Loads tile `key` into `scene` and sets the environment from it (the
   // last tile loaded sets the light, ambient and fog). Returns setUpScene()'s
-  // result plus { key, tx, ty }.
+  // result plus { key, tx, ty, effects (how many effects it placed) }.
   async loadTile(scene, key, { env, onStatus = () => {}, ...options } = {}) {
     onStatus(`Loading tile ${key}…`);
     const { gltf, release } = await loadGlb(this.tileUrl(key), this.files);
     try {
       onStatus(`Preparing tile ${key}…`);
       const tile = await setUpScene(gltf, { env, ...options });
+      const effects = options.effects !== false ? await this.placeEffects(gltf, tile, env) : 0;
       applySceneSettings(env, tile.settings, this.light);
       scene.add(tile.root);
       const [tx, ty] = parseTileKey(key);
-      return { ...tile, key, tx, ty };
+      return { ...tile, key, tx, ty, effects };
     } finally {
       release();
     }
+  }
+
+  // The effects a tile's scripts place (the Infected Zones' barriers), from
+  // the manifest's `effects` ({ name: { file } }): each loaded, dressed and
+  // put on its node, its clips looping. Effects the pack doesn't have are
+  // skipped. Resolves to the number placed.
+  async placeEffects(gltf, tile, env) {
+    const effects = (this.manifest && this.manifest.effects) || {};
+    let placed = 0;
+    for (const p of effectPlacements(gltf)) {
+      const entry = effects[p.name];
+      if (!entry) continue;
+      try {
+        const { gltf: effect, release } = await loadGlb(this.base + entry.file, this.files);
+        try {
+          const scene = await setUpScene(effect, { env, grass: false });
+          p.object.add(scene.root);
+          tile.adopt(scene);
+          placed++;
+        } finally {
+          release();
+        }
+      } catch (e) {
+        console.warn(`ff-three: effect ${p.name}:`, e);
+      }
+    }
+    return placed;
   }
 
   // The skybox for a sky set ("normal" or "fusion") tinted with the fog

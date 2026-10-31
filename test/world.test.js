@@ -5,7 +5,7 @@ import { terrainSize, terrainHeights } from "../src/terrain.js";
 import { scatter, random } from "../src/grass.js";
 import { uniformOf, sample } from "../src/animation.js";
 import { skySetAt } from "../src/sky.js";
-import { tileOrigin } from "../src/world.js";
+import { tileOrigin, World } from "../src/world.js";
 import { splitClipUrl, packClipUrl, animationClipNames } from "../src/model-viewer.js";
 
 // A terrain grid as UnityPackFF writes one: vertex z·W + x, x mirrored,
@@ -68,6 +68,12 @@ test("material curves drive the shaders' uniforms", () => {
   assert.equal(sample(times, values, 1.5), 5);
   assert.equal(sample(times, values, 5), 0);
   assert.equal(sample([0], [3], 9), 3);
+});
+
+test("a partial pack's missing tiles aren't sea", () => {
+  assert.equal(new World("/w/", { manifest: { partial: true, tiles: { "04_05": {} } } }).partial, true);
+  assert.equal(new World("/w/", { manifest: { partial: false } }).partial, false);
+  assert.equal(new World("/w/").partial, false);
 });
 
 test("world positions", () => {
