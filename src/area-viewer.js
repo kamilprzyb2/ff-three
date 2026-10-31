@@ -147,7 +147,7 @@ export async function mountArea(stage, world, spec, { controls = null, pitch = 2
   frame = requestAnimationFrame(tick);
 
   return {
-    scene, camera, env, tiles,
+    scene, camera, env, tiles, controls: orbit,
     dispose() {
       disposed = true;
       cancelAnimationFrame(frame);

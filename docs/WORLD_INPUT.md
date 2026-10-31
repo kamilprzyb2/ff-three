@@ -20,7 +20,8 @@ From each tile ff-three reads:
 - `COLOR_0` where UnityPackFF writes it (vertex colours for the `vertexColorAD` shaders);
 - the terrain: the mesh whose material has `extras.terrain` (`splats` with `texture`, `tile_size` and `tile_offset`; `controls`; `lightmap`; `details`), with UnityPackFF's vertex layout (vertex z·W + x, texture coordinates = position / size, v flipped);
 - the scene's `extras.render_settings.ambient` and `extras.colors` (`fog_depth`, `fog`);
-- nodes' `extras.animation`, the animations' `extras.float_curves` and the document's `extras.material_clips`.
+- nodes' `extras.animation`, the animations' `extras.float_curves` and the document's `extras.material_clips`;
+- nodes' `extras.scripts` (UnityPackFF's `--scripts`), when the pack has them: moving platforms and the effects to place (docs/SCRIPTS.md).
 
 ## manifest.json
 
@@ -31,6 +32,7 @@ All optional:
 | `tiles` | which tiles exist (an object keyed by `XX_YY`, or a list); a view's ring tiles that aren't there are sea. Without it, every tile is tried and missing ones are skipped |
 | `light` | `{ "direction": [x, y, z], "color": [r, g, b], "intensity": n }`, towards the light, glTF space. Default: main.unity3d's light of the three builds, `[0.8937, 0.309, 0.3253]`, white, 1 |
 | `sky.fusion_rects` | `[[x, y, width, height], …]` in map metres (x east, y north): where the area viewer uses the fusion sky by default |
+| `effects` | `{ name: { file } }`: the effect prefabs the tiles' scripts place, `file` relative to the world directory (`effect/<name>.glb`); `name` is the prefab's name in lower case, as the scripts' `nifObject` names it |
 | `fingerprint` | the render CLI's record of what each picture was made from: when it changes, renders are redone |
 
 ## Sky

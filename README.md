@@ -4,7 +4,7 @@ FusionFall's shaders for [three.js](https://threejs.org), for the glTF files [Un
 
 - **Materials** that draw like the client: the fixed-function prop shaders (`normal_*`), toon shading with outlines, the face decal, the fusions' moving skin, water, terrain splat passes, the skybox and grass. They are picked by the shader name UnityPackFF keeps in each material's `extras`.
 - **A model viewer** for characters, mobs, NPCs, nanos and items, with the game's idle cycle and a picker for every clip.
-- **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, and grass near the camera.
+- **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, grass near the camera, and, from the scene's scripts, the Infected Zones' moving platforms and barrier effects ([docs/SCRIPTS.md](docs/SCRIPTS.md)).
 - **A render CLI** that draws tiles from above and areas at an angle in headless Chromium, once, for pages that show pictures.
 - **A demo page** where you drop in a GLB, or a folder of them.
 
