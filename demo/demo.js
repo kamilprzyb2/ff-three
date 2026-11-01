@@ -54,12 +54,17 @@ async function hitboxesFor(url) {
     const mesh = npc.m_pNpcMeshData[row.m_iMesh];
     if (!mesh || (mesh.m_pstrMMeshModelString || "").toLowerCase() !== model || !row.m_iRadius) continue;
     const key = `${row.m_iRadius}/${row.m_iHeight}/${row.m_fScale.toFixed(2)}`;
-    if (!sizes.has(key)) sizes.set(key, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1, npcs: [] });
-    sizes.get(key).npcs.push(row.m_iNpcNumber);
+    if (!sizes.has(key)) sizes.set(key, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1, npcs: [], names: [] });
+    const h = sizes.get(key);
+    h.npcs.push(row.m_iNpcNumber);
+    const name = npc.m_pNpcStringData && npc.m_pNpcStringData[row.m_iNpcName] && npc.m_pNpcStringData[row.m_iNpcName].m_strName;
+    if (name && !h.names.includes(name)) h.names.push(name);
   }
   return [...sizes.values()].map((h) => ({
     ...h,
-    label: `${h.radius} × ${h.height} m, model ×${+h.scale.toFixed(2)} (NPC ${h.npcs.slice(0, 4).join(", ")}${h.npcs.length > 4 ? ", …" : ""})`,
+    // by name where the pack's tables have them (newer ff-unpack), else by NPC number
+    label: `${h.names.length ? h.names.slice(0, 3).join(", ") + (h.names.length > 3 ? ` +${h.names.length - 3}` : "")
+      : `NPC ${h.npcs.slice(0, 4).join(", ")}${h.npcs.length > 4 ? ", …" : ""}`}: ${h.radius} × ${h.height} m, model ×${+h.scale.toFixed(2)}`,
   }));
 }
 
@@ -111,7 +116,13 @@ function addModel(m) {
     else if (folder.startsWith("mob_")) { kind = "Mobs"; label = bare(folder, "mob_"); }
     else if (folder.startsWith("npc_")) { kind = "NPCs"; label = bare(folder, "npc_"); }
     else { kind = "Other models"; label = folder.replace(/_/g, " "); }
-    add(source, kind, modelItem(named(label), m.url, m.clips));
+    // the in-game names (the pack's tables): a few, then how many more
+    const item = m.names && m.names.length
+      ? modelItem(m.names.slice(0, 3).join(", ") + (m.names.length > 3 ? ` +${m.names.length - 3}` : ""), m.url, m.clips)
+      : modelItem(named(label), m.url, m.clips);
+    item.folder = named(label);
+    item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();
+    add(source, kind, item);
     return;
   }
   add(m.group || "(top)", "Models", modelItem((folder ? `${folder}/` : "") + variant.replace(/\.kfm$/i, ""), m.url, m.clips));
@@ -143,7 +154,7 @@ function fillKinds() {
 function fillItems() {
   const items = (sources.get(sourceSel.value) || new Map()).get(kindSel.value) || [];
   const q = filter.value.trim().toLowerCase();
-  const shown = items.map((it, i) => [it, i]).filter(([it]) => !q || it.label.toLowerCase().includes(q));
+  const shown = items.map((it, i) => [it, i]).filter(([it]) => !q || (it.search || it.label.toLowerCase()).includes(q));
   itemSel.replaceChildren(option("", shown.length ? `Pick one of ${shown.length}…` : "Nothing matches"),
     ...shown.map(([it, i]) => option(i, it.label)));
 }
@@ -298,7 +309,15 @@ try {
     const index = await r.json();
     for (const w of index.worlds) addWorld(w);
     for (const m of index.models) addModel(m);
-    for (const kinds of sources.values()) for (const items of kinds.values()) items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    for (const kinds of sources.values()) {
+      for (const items of kinds.values()) {
+        // two items with the same names (variants the tables don't tell apart): add the folder
+        const count = new Map();
+        for (const it of items) count.set(it.label, (count.get(it.label) || 0) + 1);
+        for (const it of items) if (it.folder && count.get(it.label) > 1 && it.label !== it.folder) it.label += ` (${it.folder})`;
+        items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      }
+    }
   }
 } catch {
   // no list: dropping files still works

@@ -87,11 +87,25 @@ test("the demo server lists models and worlds with their named areas", async () 
     { name: "Orchid Bay", zone: "Downtown", x: 2048, y: 1024, width: 512, height: 512 },
     { name: "Elsewhere", zone: "Nowhere", x: 7680, y: 7680, width: 512, height: 512 },
   ]));
+  // the client's tables: NPC 1 uses the drum, hat 1 and 2 the same model in two textures
+  put("pack/models/tables.json", JSON.stringify({ m_pNpcTable: {
+    m_pNpcData: [{}, { m_iNpcName: 1, m_iMesh: 1, m_iTexture: 0 }],
+    m_pNpcMeshData: [{}, { m_pstrMMeshModelString: "drum", m_pstrMTextureString: "drum" }],
+    m_pNpcStringData: [{}, { m_strName: "Barrel Buster" }],
+  } }));
+  put("pack/avatar/tables.json", JSON.stringify({ m_pHatItemTable: {
+    m_pItemData: [{}, { m_iItemName: 1, m_iMesh: 1, m_iTexture: 0 }, { m_iItemName: 2, m_iMesh: 2, m_iTexture: 0 }],
+    m_pItemMeshData: [{}, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat" }, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat_b" }],
+    m_pItemStringData: [{}, { m_strName: "Fox Hat" }, { m_strName: "Bear Hat" }],
+  } }));
+  put("pack/avatar/wear/hat/hat_b.glb");
   const index = indexFiles(root, "/files/");
-  assert.deepEqual(index.models.map((m) => [m.url, m.group, m.name, m.clips]), [
-    ["/files/loose/grim.glb", "loose", "grim.glb", null],
-    ["/files/pack/avatar/wear/hat/hat.glb", "pack/avatar/wear", "hat/hat.glb", null],
-    ["/files/pack/models/mob/drum/drum.glb", "pack/models/mob", "drum/drum.glb", "pack"],
+  assert.deepEqual(index.models.map((m) => [m.url, m.group, m.name, m.clips, m.names]), [
+    ["/files/loose/grim.glb", "loose", "grim.glb", null, undefined],
+    // each texture variant named by the items that use it
+    ["/files/pack/avatar/wear/hat/hat.glb", "pack/avatar/wear", "hat/hat.glb", null, ["Fox Hat"]],
+    ["/files/pack/avatar/wear/hat/hat_b.glb", "pack/avatar/wear", "hat/hat_b.glb", null, ["Bear Hat"]],
+    ["/files/pack/models/mob/drum/drum.glb", "pack/models/mob", "drum/drum.glb", "pack", ["Barrel Buster"]],
   ]);
   assert.equal(index.worlds.length, 1);
   assert.equal(index.worlds[0].url, "/files/pack/world/");

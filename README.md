@@ -76,7 +76,7 @@ npm install
 node cli/serve.mjs --dir <a directory of UnityPackFF output>
 ```
 
-Open the printed URL. With `--dir` (a folder of UnityPackFF output, ff-unpack packs, or both), three dropdowns pick what to show: the source (a build or a folder), the kind (areas, tiles, nanos, fusions, mobs, NPCs, characters, wear by type) and the item, with a filter for long lists. The page's URL follows the pick (`?model=/files/<path>.glb`, `&clips=pack` for a pack prefab, or `?world=/files/<world>/&area=4,2,4,2`), so a view can be linked to. You can also drop GLBs or a folder from your own machine on the page (tiles need their `shared/` folder, and `sky/` for the skybox).
+Open the printed URL. With `--dir` (a folder of UnityPackFF output, ff-unpack packs, or both), three dropdowns pick what to show: the source (a build or a folder), the kind (areas, tiles, nanos, fusions, mobs, NPCs, characters, wear by type) and the item, with a filter for long lists. Items are labelled with their in-game names where a pack's `tables.json` has the XDT's names (ff-unpack keeps them), each texture variant by the items or NPCs that use it. The page's URL follows the pick (`?model=/files/<path>.glb`, `&clips=pack` for a pack prefab, or `?world=/files/<world>/&area=4,2,4,2`), so a view can be linked to. You can also drop GLBs or a folder from your own machine on the page (tiles need their `shared/` folder, and `sky/` for the skybox).
 
 ## Development
 
