@@ -164,8 +164,8 @@ export function hitboxObject({ radius, height, capsule = false }) {
 // The picker: emote icons, every clip by group, pause, speed, turntable,
 // the variant (when the model has several sizes) and the hitbox. `menu`:
 // [{ title, hide_weapon, clips: [{ clip, label, icon, then }] }];
-// `hitboxes`: hitboxList()'s.
-function picker(box, menu, iconUrl, on, hitboxes = []) {
+// `hitboxes`: hitboxList()'s; `variants`: whether to pick among them.
+function picker(box, menu, iconUrl, on, hitboxes = [], variants = true) {
   const select = el("select", { className: "ff-input", ariaLabel: "Animation" });
   select.append(el("option", { value: "", textContent: "Idle" }));
   const entries = new Map();
@@ -212,7 +212,7 @@ function picker(box, menu, iconUrl, on, hitboxes = []) {
   const extra = [];
   if (hitboxes.length) {
     // the variants (the model's NPC rows, by size and scale), then the hitbox toggle
-    if (hitboxes.length > 1) {
+    if (variants && hitboxes.length > 1) {
       const which = el("select", { className: "ff-input", ariaLabel: "Variant" });
       hitboxes.forEach((h, i) => which.append(el("option", { value: i, textContent: h.label || `${h.radius} × ${h.height} m`, selected: i === on.variant(null) })));
       which.addEventListener("change", () => on.variant(+which.value));
@@ -230,7 +230,9 @@ function picker(box, menu, iconUrl, on, hitboxes = []) {
 }
 
 // Mounts the viewer for the GLB at `url` in `stage` (an element; its
-// controls go in options.controls) and resolves to { dispose, gltf }.
+// controls go in options.controls) and resolves to { dispose, gltf,
+// variant(i), hitbox(on) } (the last two as the controls do; null just
+// reads).
 // Options (each can also come from the GLB's root extras):
 //   kind       "player" | "creature" | "item" (framing; default: creature,
 //              or player for ActorSkinCombiner rigs)
@@ -249,6 +251,8 @@ function picker(box, menu, iconUrl, on, hitboxes = []) {
 //              controls and, for a list, a variant picker; the model is
 //              scaled by the variant's `scale`, the hitbox drawn at its size
 //   variant    the variant shown first (default: the first at scale 1)
+//   variantPicker  false leaves the variant picker out of the controls (for a
+//              page with its own, through variant())
 //   hitboxOn   whether the hitbox shows at first (default: no)
 //   onHitbox   called with true or false when the toggle changes (to keep it
 //              for the next model)
@@ -425,7 +429,7 @@ export async function mountModel(stage, url, options = {}) {
   };
   const menu = info.menu || (names.length > 1 ? [{ title: "Clips", hide_weapon: false, clips: names.map((n) => ({ clip: n, label: n, then: "loop" })) }] : []);
   if (hitboxes.length) { setScale(hitboxes[variant].scale ?? 1, true); drawHitbox(); }
-  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on, hitboxes);
+  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on, hitboxes, info.variantPicker !== false);
 
   if (anim.first) await anim.idle();
   mixer.update(0);
@@ -448,6 +452,8 @@ export async function mountModel(stage, url, options = {}) {
 
   return {
     gltf,
+    variant: (i) => on.variant(i),
+    hitbox: (v) => on.hitbox(v),
     dispose() {
       running = false;
       renderer.setAnimationLoop(null);

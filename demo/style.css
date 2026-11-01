@@ -38,3 +38,27 @@ header p { margin: 0 0 16px; color: var(--muted); }
 .picker select { max-width: 100%; }
 .picker input { width: 160px; max-width: 100%; }
 .drop { margin-top: 16px; }
+/* the stage, and beside it (below it on narrow screens) the variants panel */
+.stage-row.with-variants { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.stage-box { position: relative; min-width: 0; }
+.stage-label { position: absolute; left: 10px; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.stage-label > * { background: color-mix(in srgb, var(--panel) 85%, transparent); border-radius: 6px; padding: 2px 8px; font-size: 13px; }
+.chip { display: inline-block; white-space: nowrap; font-size: 12px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-variant-numeric: tabular-nums; }
+.stage-label .chip { font-size: 12px; }
+.variants { border-left: 1px solid var(--line); display: flex; flex-direction: column; height: min(70vh, 640px); min-height: 0; }
+.variants h2 { margin: 0; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--line); }
+.variants h2 span { color: var(--muted); font-weight: normal; font-size: 13px; }
+.variants-list { position: relative; overflow: auto; flex: 1; min-height: 0; }
+.variants h3 { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0; padding: 6px 12px; font-size: 12px; font-weight: normal; background: var(--sunk); border-bottom: 1px solid var(--line); }
+.variants h3 .count { margin-left: auto; color: var(--muted); }
+.variants ul { list-style: none; margin: 0; padding: 2px 0; }
+.variants li button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 12px; font: inherit; font-size: 14px; color: var(--ink); background: none; border: 0; border-left: 3px solid transparent; text-align: left; cursor: pointer; }
+.variants li button:hover { background: var(--sunk); }
+.variants li button[aria-pressed="true"] { border-left-color: var(--accent); background: var(--sunk); }
+.variants li img, .variants .noicon { flex: none; width: 24px; height: 24px; object-fit: contain; }
+.variants .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.variants .level { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .stage-row.with-variants { grid-template-columns: minmax(0, 1fr); }
+  .variants { border-left: 0; border-top: 1px solid var(--line); height: auto; max-height: 300px; }
+}

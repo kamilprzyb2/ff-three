@@ -1,7 +1,7 @@
 // The demo page: pick a model or an area from what the server has
 // (cli/serve.mjs --dir) with three dropdowns (source, kind, item), or drop
 // UnityPackFF GLBs and the files they point to. The URL follows the pick:
-// ?model=<url>[&clips=pack] or ?world=<url>&area=tx0,ty0,tx1,ty1.
+// ?model=<url>[&clips=pack][&npc=<number>] or ?world=<url>&area=tx0,ty0,tx1,ty1.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mountModel, packClipUrl } from "../src/model-viewer.js";
@@ -18,55 +18,23 @@ const status = (text) => { $("status").textContent = text; };
 // ---------------------------------------------------------------- viewing
 let current = null, token = 0;
 
-async function open(item, { updateUrl = true } = {}) {
+async function open(item, { updateUrl = true, npc } = {}) {
   const mine = ++token;
   if (current) { current.dispose(); current = null; }
   controls.replaceChildren();
+  clearVariants();
   status("Loading…");
   if (updateUrl && item.query) history.replaceState(null, "", "?" + item.query);
   try {
-    const viewer = await item.open();
+    const viewer = await item.open({ npc });
     if (mine !== token) { viewer.dispose(); return; }
     current = window.ffViewer = viewer;
     status(item.title || item.label);
+    if (viewer.shown) viewer.shown();
   } catch (e) {
     console.error(e);
     if (mine === token) status(`Could not show ${item.label}: ${e.message || e}`);
   }
-}
-
-// A pack model's hitboxes. Mobs and NPCs (<build>/models/mob/<model>/):
-// the sizes of the NPC rows that use the model, from the pack's
-// models/tables.json (m_iRadius and m_iHeight in centimetres, m_fScale);
-// the boy and girl actors: the player's capsule; anything else: none.
-const tables = new Map();
-async function hitboxesFor(url) {
-  if (/\/avatar\/actor\/[^/]+\/[^/]+\.glb$/i.test(url)) return "player";
-  const m = /^(.*\/models\/)mob\/([^/]+)\/[^/]+\.glb$/i.exec(url);
-  if (!m) return null;
-  const tablesUrl = m[1] + "tables.json";
-  if (!tables.has(tablesUrl)) tables.set(tablesUrl, fetch(tablesUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null));
-  const t = await tables.get(tablesUrl);
-  const npc = t && t.m_pNpcTable;
-  if (!npc) return null;
-  const model = decodeURIComponent(m[2]).toLowerCase();
-  const sizes = new Map();
-  for (const row of npc.m_pNpcData) {
-    const mesh = npc.m_pNpcMeshData[row.m_iMesh];
-    if (!mesh || (mesh.m_pstrMMeshModelString || "").toLowerCase() !== model || !row.m_iRadius) continue;
-    const key = `${row.m_iRadius}/${row.m_iHeight}/${row.m_fScale.toFixed(2)}`;
-    if (!sizes.has(key)) sizes.set(key, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1, npcs: [], names: [] });
-    const h = sizes.get(key);
-    h.npcs.push(row.m_iNpcNumber);
-    const name = npc.m_pNpcStringData && npc.m_pNpcStringData[row.m_iNpcName] && npc.m_pNpcStringData[row.m_iNpcName].m_strName;
-    if (name && !h.names.includes(name)) h.names.push(name);
-  }
-  return [...sizes.values()].map((h) => ({
-    ...h,
-    // by name where the pack's tables have them (newer ff-unpack), else by NPC number
-    label: `${h.names.length ? h.names.slice(0, 3).join(", ") + (h.names.length > 3 ? ` +${h.names.length - 3}` : "")
-      : `NPC ${h.npcs.slice(0, 4).join(", ")}${h.npcs.length > 4 ? ", …" : ""}`}: ${h.radius} × ${h.height} m, model ×${+h.scale.toFixed(2)}`,
-  }));
 }
 
 // Whether the hitbox shows: kept from model to model, and over reloads.
@@ -77,12 +45,93 @@ const keepHitbox = (v) => {
   try { localStorage.setItem("ff-three-demo-hitbox", v ? "1" : "0"); } catch { /* no storage */ }
 };
 
-const modelItem = (label, url, clips) => ({
+// A mob or NPC model's sizes: the NPC rows that use it (files.json's
+// `npcs`, from the pack's tables.json) by the model's scale (m_fScale) and
+// the hitbox (m_iRadius, m_iHeight), smallest first. Each is one of the
+// viewer's variants.
+function sizesOf(npcs) {
+  const sizes = new Map();
+  for (const n of npcs) {
+    const key = `${n.scale}/${n.radius}/${n.height}`;
+    if (!sizes.has(key)) sizes.set(key, { radius: n.radius, height: n.height, scale: n.scale, npcs: [] });
+    sizes.get(key).npcs.push(n);
+  }
+  return [...sizes.values()].sort((a, b) => a.scale - b.scale || a.radius - b.radius || a.height - b.height);
+}
+const num = (v) => String(+v.toFixed(2));
+const el = (tag, props = {}, children = []) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
+const chips = (s) => [
+  el("span", { className: "chip", textContent: `model ×${num(s.scale)}`, title: "The model's scale (m_fScale)" }),
+  el("span", { className: "chip", textContent: `hitbox ${num(s.radius)} × ${num(s.height)} m`, title: "The hitbox cylinder's radius and height (m_iRadius, m_iHeight)" }),
+];
+
+// The variants panel beside the stage: the NPCs that use the model, under
+// their sizes; picking one shows the model at its scale with its hitbox. And
+// the label on the stage, naming the one shown.
+const panel = $("variants"), label = $("stage-label");
+function clearVariants() {
+  panel.hidden = label.hidden = true;
+  panel.replaceChildren();
+  stage.parentElement.parentElement.classList.remove("with-variants");
+}
+function showVariants(item, viewer, sizes, npcId) {
+  const showLabel = (n, s) => {
+    label.replaceChildren(el("strong", { textContent: n.name }), ...(n.level != null ? [el("span", { textContent: `Lv ${n.level}` })] : []), ...chips(s));
+    label.hidden = false;
+  };
+  const buttons = [];
+  const pick = (n, gi, b) => {
+    viewer.variant(gi);
+    for (const x of buttons) x.setAttribute("aria-pressed", String(x === b));
+    showLabel(n, sizes[gi]);
+    history.replaceState(null, "", `?${item.query}&npc=${n.id}`);
+  };
+  const groups = sizes.map((s, gi) => el("section", {}, [
+    el("h3", {}, [...chips(s), el("span", { className: "count", textContent: s.npcs.length })]),
+    el("ul", {}, s.npcs.map((n) => {
+      const b = el("button", { type: "button", title: `NPC ${n.id}` }, [
+        n.icon ? el("img", { src: n.icon, alt: "", loading: "lazy", decoding: "async" }) : el("span", { className: "noicon" }),
+        el("span", { className: "name", textContent: n.name }),
+        ...(n.level != null ? [el("span", { className: "level", textContent: `Lv ${n.level}` })] : []),
+      ]);
+      b.setAttribute("aria-pressed", String(n.id === npcId));
+      b.addEventListener("click", () => pick(n, gi, b));
+      buttons.push(b);
+      return el("li", {}, [b]);
+    })),
+  ]));
+  const count = sizes.reduce((c, s) => c + s.npcs.length, 0);
+  panel.replaceChildren(el("h2", {}, ["Variants ", el("span", { textContent: `${count} NPC${count === 1 ? "" : "s"}, ${sizes.length} size${sizes.length === 1 ? "" : "s"}` })]),
+    el("div", { className: "variants-list" }, groups));
+  panel.hidden = false;
+  stage.parentElement.parentElement.classList.add("with-variants");
+  const gi = sizes.findIndex((s) => s.npcs.some((n) => n.id === npcId));
+  showLabel(sizes[gi].npcs.find((n) => n.id === npcId), sizes[gi]);
+  // the one shown, in the middle of the list (scrolling only the list, not the page)
+  const on = buttons.find((b) => b.getAttribute("aria-pressed") === "true");
+  const list = panel.querySelector(".variants-list");
+  if (on) list.scrollTop = on.offsetTop - list.clientHeight / 2;
+}
+
+// A model. The boy and girl actors get the player's capsule for a hitbox;
+// mobs and NPCs their variants (opening with `npc`, the NPC's number, or the
+// first at the model's own scale).
+const modelItem = (label, url, clips, npcs) => ({
   label, title: url, key: `model:${url}`, query: `model=${encodeURIComponent(url)}${clips === "pack" ? "&clips=pack" : ""}`,
-  open: async () => mountModel(stage, url, {
-    controls, hitbox: await hitboxesFor(url), hitboxOn, onHitbox: keepHitbox,
-    ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
-  }),
+  async open({ npc } = {}) {
+    const sizes = npcs && npcs.length ? sizesOf(npcs) : [];
+    const all = sizes.flatMap((s) => s.npcs);
+    const first = all.find((n) => n.id === npc) || (sizes.find((s) => s.scale === 1) || sizes[0] || { npcs: [] }).npcs[0];
+    const variant = sizes.findIndex((s) => s.npcs.includes(first));
+    const viewer = await mountModel(stage, url, {
+      controls, hitboxOn, onHitbox: keepHitbox,
+      hitbox: /\/avatar\/actor\/[^/]+\/[^/]+\.glb$/i.test(url) ? "player" : sizes.length ? sizes : null,
+      ...(sizes.length ? { variant, variantPicker: false } : {}),
+      ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
+    });
+    if (sizes.length) viewer.shown = () => showVariants(this, viewer, sizes, first.id);
+    return viewer;
+  },
 });
 
 const areaItem = (label, worldUrl, area, title) => ({
@@ -127,8 +176,8 @@ function addModel(m) {
     else { kind = "Other models"; label = folder.replace(/_/g, " "); }
     // the in-game names (the pack's tables): a few, then how many more
     const item = m.names && m.names.length
-      ? modelItem(m.names.slice(0, 3).join(", ") + (m.names.length > 3 ? ` +${m.names.length - 3}` : ""), m.url, m.clips)
-      : modelItem(named(label), m.url, m.clips);
+      ? modelItem(m.names.slice(0, 3).join(", ") + (m.names.length > 3 ? ` +${m.names.length - 3}` : ""), m.url, m.clips, m.npcs)
+      : modelItem(named(label), m.url, m.clips, m.npcs);
     item.folder = named(label);
     item.icon = m.icon || null;
     item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();
@@ -334,13 +383,14 @@ try {
 }
 refresh();
 
-// ?model= or ?world=&area=: the item the URL names, picked in the dropdowns
+// ?model=[&npc=] or ?world=&area=: the item the URL names, picked in the dropdowns
 // when the list has it
 const q = new URLSearchParams(location.search);
 const wanted = q.get("model")
   ? modelItem(q.get("model").split("/").pop(), q.get("model"), q.get("clips"))
   : q.get("world") && q.get("area") ? areaItem(`area ${q.get("area")}`, q.get("world"), q.get("area").split(",").map(Number)) : null;
 if (wanted) {
-  if (select(wanted.key)) open(sources.get(sourceSel.value).get(kindSel.value)[+itemSel.value], { updateUrl: false });
-  else open(wanted, { updateUrl: false });
+  const npc = q.get("npc") ? Number(q.get("npc")) : undefined;
+  if (select(wanted.key)) open(sources.get(sourceSel.value).get(kindSel.value)[+itemSel.value], { updateUrl: false, npc });
+  else open(wanted, { updateUrl: false, npc });
 }

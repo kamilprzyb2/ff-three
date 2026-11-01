@@ -26,8 +26,10 @@ export const ICON_PREFIXES = ["wpnicon", "nanoicon", "skillicon", "cosicon", "np
 
 // The in-game names and icons of the models a sub-pack's tables.json names
 // (ff-unpack copies the client's XDT tables): Map of "<model folder>" and
-// "<model folder>/<variant>" (lower case) → { names, icon }: the names in
-// table order, the icon file of the first row with one. Every
+// "<model folder>/<variant>" (lower case) → { names, icon, npcs }: the
+// names in table order, the icon file of the first row with one, and, for
+// the NPC table, each NPC row's { id, name, level, icon, radius, height,
+// scale } (m_iRadius and m_iHeight in metres, m_fScale the model's). Every
 // table works the same way: a row's m_iMesh picks a mesh row, whose
 // m_pstrMMeshModelString (and m_pstrFMeshModelString) is the model's
 // folder and whose m_pstrMTextureString names the variant (or, where it
@@ -42,25 +44,31 @@ export function packNames(tables) {
     const lists = Object.entries(table || {});
     const data = lists.find(([k]) => k.endsWith("Data") && !/Mesh|String/.test(k));
     const meshes = (lists.find(([k]) => k.endsWith("MeshData")) || [])[1];
-    const strings = (lists.find(([k]) => k.endsWith("StringData")) || [])[1];
+    const strings = (lists.find(([k]) => k.endsWith("StringData")) || [])[1] || [];
     const icons = (lists.find(([k]) => k.endsWith("IconData")) || [])[1] || [];
-    if (!data || !meshes || !strings) continue;
+    if (!data || !meshes) continue;
     for (const row of data[1]) {
       const nameKey = Object.keys(row).find((k) => /^m_i\w*Name$/.test(k));
       const mesh = meshes[row.m_iMesh];
-      const name = nameKey && strings[row[nameKey]] && strings[row[nameKey]].m_strName;
-      if (!mesh || !name || name === "null") continue;
+      let name = nameKey && strings[row[nameKey]] && strings[row[nameKey]].m_strName;
+      if (name === "null") name = null;
+      // NPCs have sizes (and are listed by number where the tables have no names)
+      const npc = row.m_iRadius ? { id: row.m_iNpcNumber, name: name || `NPC ${row.m_iNpcNumber}`, level: row.m_iNpcLevel ?? null,
+        icon: null, radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 } : null;
+      if (!mesh || !(name || npc)) continue;
       const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
       const tex = (mesh.m_pstrMTextureString && mesh.m_pstrMTextureString !== "null" && mesh.m_pstrMTextureString)
         || (texRow && texRow.m_pstrMTextureString);
       const iconRow = icons[row.m_iIcon1 ?? row.m_iIcon];
       const prefix = iconRow && (row.m_iIcon1 ?? row.m_iIcon) ? ICON_PREFIXES[iconRow.m_iIconType] : null;
       const icon = prefix ? `${prefix}_${String(iconRow.m_iIconNumber).padStart(2, "0")}.png` : null;
+      if (npc) npc.icon = icon;
       const add = (key) => {
-        if (!names.has(key)) names.set(key, { names: [], icon: null });
+        if (!names.has(key)) names.set(key, { names: [], icon: null, npcs: [] });
         const entry = names.get(key);
-        if (!entry.names.includes(name)) entry.names.push(name);
+        if (name && !entry.names.includes(name)) entry.names.push(name);
         if (!entry.icon && icon) entry.icon = icon;
+        if (npc) entry.npcs.push(npc);
       };
       for (const model of [mesh.m_pstrMMeshModelString, mesh.m_pstrFMeshModelString]) {
         if (!model || model === "null") continue;
@@ -74,11 +82,12 @@ export function packNames(tables) {
 
 // What a directory holds, for the demo page: { worlds: [{ url, tiles,
 // areas: [{ name, zone, area }] }], models: [{ url, group, name, clips,
-// names, icon }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
+// names, icon, npcs }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
 // an ff-unpack pack, whose folder is part of its `name` and whose category
 // folder is its `group`; `names` are its in-game names and `icon` the URL of
 // its icon, where the pack's tables.json has them (packNames()) and its
-// icons/ the file.
+// icons/ the file; `npcs` the NPC rows that use a mob or NPC model, their
+// icons URLs too.
 export function indexFiles(root, prefix = "/files/") {
   const worlds = [], models = [];
   const url = (rel) => prefix + rel.split(path.sep).map(encodeURIComponent).join("/");
@@ -132,10 +141,14 @@ export function indexFiles(root, prefix = "/files/") {
       const folder = parts[parts.length - 1].toLowerCase(), variant = n.slice(0, -4).toLowerCase();
       const known = inPack ? namesOf(packRoot).get(`${folder}/${variant}`) || namesOf(packRoot).get(folder) : null;
       if (known) {
-        entry.names = known.names;
         // the pack's icons/ sits beside its sub-packs
-        const iconRel = known.icon && path.join(packRoot, "..", "icons", known.icon);
-        if (iconRel && fs.existsSync(path.join(root, iconRel))) entry.icon = url(path.normalize(iconRel));
+        const iconUrl = (file) => {
+          const iconRel = file && path.normalize(path.join(packRoot, "..", "icons", file));
+          return iconRel && fs.existsSync(path.join(root, iconRel)) ? url(iconRel) : null;
+        };
+        if (known.names.length) entry.names = known.names;
+        if (iconUrl(known.icon)) entry.icon = iconUrl(known.icon);
+        if (known.npcs.length) entry.npcs = known.npcs.map((n) => ({ ...n, icon: iconUrl(n.icon) }));
       }
       models.push(entry);
     }
