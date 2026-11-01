@@ -1,6 +1,6 @@
 # What ff-three reads from a world directory
 
-The area viewer (`mountArea`), `World` and the render CLI read a world directory as ff-unpack writes it (its `PACK_FORMAT.md`, section `world/`, is the specification). This file lists the parts ff-three uses, so that both sides know what they can change.
+The area viewer (`mountArea`), `World` and the render CLI read a world directory as [ff-unpack](https://github.com/kamilprzyb2/ff-unpack) writes it (its [PACK_FORMAT.md](https://github.com/kamilprzyb2/ff-unpack/blob/master/PACK_FORMAT.md), section `world/`, is the specification). This file lists the parts ff-three uses, so that both sides know what they can change.
 
 ```
 <world>/

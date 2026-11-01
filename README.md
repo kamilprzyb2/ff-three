@@ -6,7 +6,7 @@ FusionFall's shaders for [three.js](https://threejs.org), for the glTF files [Un
 - **A model viewer** for characters, mobs, NPCs, nanos and items, with the game's idle cycle and a picker for every clip.
 - **An area viewer** for the world: tiles side by side with sea, sky and fog, animated props, grass near the camera, and, from the scene's scripts, the Infected Zones' moving platforms and barrier effects ([docs/SCRIPTS.md](docs/SCRIPTS.md)).
 - **A render CLI** that draws tiles from above and areas at an angle in headless Chromium, once, for pages that show pictures.
-- **A demo page** that picks models and areas from a folder of UnityPackFF output or ff-unpack packs, or shows GLBs you drop on it.
+- **A demo page** that picks models and areas from a folder of UnityPackFF output or [ff-unpack](https://github.com/kamilprzyb2/ff-unpack) packs, or shows GLBs you drop on it.
 
 ff-three needs only the client's data, through UnityPackFF. Nothing here is game art: you export your own from your own client files.
 
