@@ -87,6 +87,37 @@ node dev/shot.mjs --dir <files> --page "/demo/?model=/files/x.glb" --out shot.pn
 
 The tests make their own data (`test/helpers.js`): no game files are needed or committed.
 
+### Project structure
+
+```
+src/                  the library: ES modules for the browser, importing three
+  index.js            every export
+  shader-name.js      what a FusionFall shader name says: family, blend, depth, culling
+  shaders.js          the GLSL
+  materials.js        dress(): swaps a glTF scene's materials for the client's shaders
+  environment.js      the light, fog and time every material reads
+  terrain.js          terrain splat passes and height lookups
+  grass.js            grass scattered from the terrain's detail densities
+  sky.js              the skybox
+  animation.js        props' clips and material curves
+  scripts.js          what the scene's scripts do: moving platforms, placed effects
+  png.js              a PNG decoder that keeps the stored bytes (control maps, densities)
+  world.js            World: tiles from a world directory, the sea around them
+  jobs.js             render jobs as data (no three: the CLI uses it too)
+  render.js           drawing a job: a tile from above, an area at an angle
+  model-viewer.js     mountModel()
+  area-viewer.js      mountArea()
+cli/
+  render.mjs          ff-three-render: runs render jobs in headless Chromium
+  server.mjs          the static file server render.mjs and serve.mjs use
+  serve.mjs           the demo server
+render.html           the page render.mjs drives, one job per load
+demo/                 the demo page
+docs/                 how ff-three draws the client, and what it reads from a world pack
+test/                 node:test tests; browser.test.js renders in headless Chromium
+dev/shot.mjs          screenshots of demo pages, for checking by eye
+```
+
 ## Licence
 
 MIT, see [LICENSE](LICENSE).
