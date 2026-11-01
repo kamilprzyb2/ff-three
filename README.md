@@ -89,4 +89,4 @@ The tests make their own data (`test/helpers.js`): no game files are needed or c
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). FusionFall's art, sound and code belong to their owners: ff-three contains none of it, and the files you unpack from your own client stay yours to keep out of version control.
+MIT, see [LICENSE](LICENSE).
