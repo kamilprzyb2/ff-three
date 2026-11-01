@@ -132,9 +132,39 @@ function el(tag, props, children) {
   return e;
 }
 
-// The picker: emote icons, every clip by group, pause, speed, turntable.
-// `menu`: [{ title, hide_weapon, clips: [{ clip, label, icon, then }] }].
-function picker(box, menu, iconUrl, on) {
+// A player's collider: the CharacterController capsule on the client's
+// player containers (radius 0.3 m, 1.6 m tall), the same for everyone.
+export const PLAYER_HITBOX = { label: "player", radius: 0.3, height: 1.6, capsule: true };
+
+// The hitboxes an option gives: "player", one { radius, height, … } or a list.
+export function hitboxList(option) {
+  if (!option) return [];
+  return [].concat(option).map((h) => (h === "player" ? PLAYER_HITBOX : h));
+}
+
+// A hitbox as a wireframe standing on the model's origin, where the game
+// places it: a vertical cylinder for NPCs and mobs (their NPC row's
+// m_iRadius and m_iHeight, in metres), a capsule for players. In game the
+// model is scaled by its NPC row's m_fScale and the hitbox isn't, so it's
+// drawn divided by `scale` to sit right against the unscaled model.
+export function hitboxObject({ radius, height, capsule = false, scale = 1 }) {
+  const r = radius / scale, h = height / scale;
+  const geometry = capsule
+    ? new THREE.CapsuleGeometry(r, Math.max(h - 2 * r, 0), 4, 16).translate(0, h / 2, 0)
+    : new THREE.CylinderGeometry(r, r, h, 24, 1, true).translate(0, h / 2, 0);
+  const lines = new THREE.LineSegments(new THREE.WireframeGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.85, depthTest: false }));
+  geometry.dispose();
+  lines.renderOrder = 10;
+  lines.raycast = () => {};
+  lines.name = "hitbox";
+  return lines;
+}
+
+// The picker: emote icons, every clip by group, pause, speed, turntable,
+// and the hitbox. `menu`: [{ title, hide_weapon, clips: [{ clip, label,
+// icon, then }] }]; `hitboxes`: hitboxList()'s.
+function picker(box, menu, iconUrl, on, hitboxes = []) {
   const select = el("select", { className: "ff-input", ariaLabel: "Animation" });
   select.append(el("option", { value: "", textContent: "Idle" }));
   const entries = new Map();
@@ -178,7 +208,21 @@ function picker(box, menu, iconUrl, on) {
   turn.setAttribute("aria-pressed", String(on.turntable(null)));
   turn.addEventListener("click", () => turn.setAttribute("aria-pressed", String(on.turntable(turn.getAttribute("aria-pressed") !== "true"))));
 
-  const row = el("div", { className: "ff-row" }, menu.length ? [select, pause, speed, turn] : [turn]);
+  const extra = [];
+  if (hitboxes.length) {
+    // off by default; a list when the model's NPC rows differ in size
+    const which = el("select", { className: "ff-input", ariaLabel: "Hitbox" });
+    hitboxes.forEach((h, i) => which.append(el("option", { value: i, textContent: h.label || `${h.radius} × ${h.height} m` })));
+    const toggle = el("button", { type: "button", className: "ff-button", textContent: "Hitbox" });
+    toggle.setAttribute("aria-pressed", "false");
+    toggle.title = "The hitbox the game uses: a cylinder for NPCs and mobs, a capsule for players";
+    const show = () => on.hitbox(toggle.getAttribute("aria-pressed") === "true" ? +which.value : null);
+    toggle.addEventListener("click", () => { toggle.setAttribute("aria-pressed", String(toggle.getAttribute("aria-pressed") !== "true")); show(); });
+    which.addEventListener("change", show);
+    extra.push(toggle);
+    if (hitboxes.length > 1) extra.push(which);
+  }
+  const row = el("div", { className: "ff-row" }, [...(menu.length ? [select, pause, speed, turn] : [turn]), ...extra]);
   box.replaceChildren(...(icons.childElementCount ? [icons] : []), row);
   return { idle() { select.value = ""; }, showPaused };
 }
@@ -197,6 +241,9 @@ function picker(box, menu, iconUrl, on) {
 //              splitClipUrl; packClipUrl for an ff-unpack pack)
 //   iconUrl    icon → URL for the menu's emote icons
 //   weapon     lay a tall item on its side (weapons hang pointing down)
+//   hitbox     "player", or { radius, height, scale, label } in metres (an NPC
+//              row's m_iRadius and m_iHeight / 100 and its m_fScale), or a
+//              list of them: a "Hitbox" toggle in the controls, off at first
 //   loader     a GLTFLoader to use (one with a LoadingManager for dropped files)
 export async function mountModel(stage, url, options = {}) {
   const base = new URL(url, location.href).href;
@@ -249,6 +296,7 @@ export async function mountModel(stage, url, options = {}) {
   if (firstClip) { mixer.clipAction(firstClip).play(); mixer.update(0); }
   const rigid = info.kind === "item";
   const player = info.kind === "player";
+  const hitboxes = hitboxList(info.hitbox);
   const box = new THREE.Box3().setFromObject(pivot, true);
   const size0 = box.getSize(new THREE.Vector3());
   if (rigid && info.weapon && size0.y > Math.max(size0.x, size0.z)) pivot.rotation.z = Math.PI / 2;
@@ -258,6 +306,12 @@ export async function mountModel(stage, url, options = {}) {
   box.setFromObject(pivot, true);
   const body = new THREE.Box3();
   pivot.traverse((o) => { if (o.isSkinnedMesh) body.expandByObject(o, true); });
+  if (box.isEmpty()) {
+    // nothing drawn (a bare skeleton, such as the player actors): frame the
+    // hitbox, or a person's size
+    if (hitboxes.length) box.setFromObject(hitboxObject(hitboxes[0]));
+    else box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1.8, 0.5));
+  }
   if (body.isEmpty()) body.copy(box);
   mixer.stopAllAction();
   if (!rigid) scene.add(floorShadow(body));
@@ -300,6 +354,7 @@ export async function mountModel(stage, url, options = {}) {
   resize();
 
   let speed = 1, paused = reduce, running = true;
+  let shownHitbox = null;
   const on = {
     async play(entry, group) {
       if (weapon) weapon.visible = !group.hide_weapon;
@@ -311,9 +366,13 @@ export async function mountModel(stage, url, options = {}) {
     togglePause() { paused = !paused; return paused; },
     speed(s) { speed = s; },
     turntable(v) { if (v !== null) orbit.autoRotate = v; return orbit.autoRotate; },
+    hitbox(index) {
+      if (shownHitbox) { pivot.remove(shownHitbox); shownHitbox.geometry.dispose(); shownHitbox.material.dispose(); shownHitbox = null; }
+      if (index != null && hitboxes[index]) pivot.add(shownHitbox = hitboxObject(hitboxes[index]));
+    },
   };
   const menu = info.menu || (names.length > 1 ? [{ title: "Clips", hide_weapon: false, clips: names.map((n) => ({ clip: n, label: n, then: "loop" })) }] : []);
-  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on);
+  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on, hitboxes);
 
   if (anim.first) await anim.idle();
   mixer.update(0);

@@ -34,9 +34,41 @@ async function open(item, { updateUrl = true } = {}) {
   }
 }
 
+// A pack model's hitboxes. Mobs and NPCs (<build>/models/mob/<model>/):
+// the sizes of the NPC rows that use the model, from the pack's
+// models/tables.json (m_iRadius and m_iHeight in centimetres, m_fScale);
+// the boy and girl actors: the player's capsule; anything else: none.
+const tables = new Map();
+async function hitboxesFor(url) {
+  if (/\/avatar\/actor\/[^/]+\/[^/]+\.glb$/i.test(url)) return "player";
+  const m = /^(.*\/models\/)mob\/([^/]+)\/[^/]+\.glb$/i.exec(url);
+  if (!m) return null;
+  const tablesUrl = m[1] + "tables.json";
+  if (!tables.has(tablesUrl)) tables.set(tablesUrl, fetch(tablesUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+  const t = await tables.get(tablesUrl);
+  const npc = t && t.m_pNpcTable;
+  if (!npc) return null;
+  const model = decodeURIComponent(m[2]).toLowerCase();
+  const sizes = new Map();
+  for (const row of npc.m_pNpcData) {
+    const mesh = npc.m_pNpcMeshData[row.m_iMesh];
+    if (!mesh || (mesh.m_pstrMMeshModelString || "").toLowerCase() !== model || !row.m_iRadius) continue;
+    const key = `${row.m_iRadius}/${row.m_iHeight}/${row.m_fScale.toFixed(2)}`;
+    if (!sizes.has(key)) sizes.set(key, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1, npcs: [] });
+    sizes.get(key).npcs.push(row.m_iNpcNumber);
+  }
+  return [...sizes.values()].map((h) => ({
+    ...h,
+    label: `${h.radius} × ${h.height} m, model ×${+h.scale.toFixed(2)} (NPC ${h.npcs.slice(0, 4).join(", ")}${h.npcs.length > 4 ? ", …" : ""})`,
+  }));
+}
+
 const modelItem = (label, url, clips) => ({
   label, title: url, key: `model:${url}`, query: `model=${encodeURIComponent(url)}${clips === "pack" ? "&clips=pack" : ""}`,
-  open: () => mountModel(stage, url, { controls, ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}) }),
+  open: async () => mountModel(stage, url, {
+    controls, hitbox: await hitboxesFor(url),
+    ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
+  }),
 });
 
 const areaItem = (label, worldUrl, area, title) => ({
