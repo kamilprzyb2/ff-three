@@ -98,9 +98,9 @@ test("the demo server lists models and worlds with their named areas", async () 
   } }));
   put("pack/icons/mobicon_05.png");
   put("pack/avatar/tables.json", JSON.stringify({ m_pHatItemTable: {
-    m_pItemData: [{}, { m_iItemName: 1, m_iMesh: 1, m_iTexture: 0 }, { m_iItemName: 2, m_iMesh: 2, m_iTexture: 0 }],
+    m_pItemData: [{}, { m_iItemNumber: 1, m_iItemName: 1, m_iMesh: 1, m_iTexture: 0, m_iMinReqLev: 4 }, { m_iItemNumber: 2, m_iItemName: 2, m_iMesh: 2, m_iTexture: 0 }],
     m_pItemMeshData: [{}, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat" }, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat_b" }],
-    m_pItemStringData: [{}, { m_strName: "Fox Hat" }, { m_strName: "Bear Hat" }],
+    m_pItemStringData: [{}, { m_strName: "Fox Hat", m_strComment1: "red" }, { m_strName: "Bear Hat", m_strComment1: " " }],
   } }));
   put("pack/avatar/wear/hat/hat_b.glb");
   const index = indexFiles(root, "/files/");
@@ -114,10 +114,13 @@ test("the demo server lists models and worlds with their named areas", async () 
   const drum = index.models.find((m) => m.name === "drum/drum.glb");
   assert.equal(drum.icon, "/files/pack/icons/mobicon_05.png");
   // the NPCs that use it, with their sizes in metres, for the hitbox and the variants
-  assert.deepEqual(drum.npcs, [
-    { id: 1, name: "Barrel Buster", level: 3, style: 1, icon: "/files/pack/icons/mobicon_05.png", radius: 0.6, height: 2.5, scale: 1 },
-    { id: 2, name: "Giant Barrel Buster", level: 9, style: null, icon: null, radius: 0.9, height: 3.75, scale: 1.5 },
+  assert.deepEqual(drum.rows, [
+    { id: 1, name: "Barrel Buster", icon: "/files/pack/icons/mobicon_05.png", note: null, level: 3, style: 1, radius: 0.6, height: 2.5, scale: 1 },
+    { id: 2, name: "Giant Barrel Buster", icon: null, note: null, level: 9, style: null, radius: 0.9, height: 3.75, scale: 1.5 },
   ]);
+  // other tables' rows: no sizes; the comment that tells apart two of one name
+  assert.deepEqual(index.models.find((m) => m.name === "hat/hat.glb").rows,
+    [{ id: 1, name: "Fox Hat", icon: null, note: "red", level: 4, style: null }]);
   assert.equal(index.worlds.length, 1);
   assert.equal(index.worlds[0].url, "/files/pack/world/");
   assert.deepEqual(index.worlds[0].tiles.sort(), ["03_01", "04_02"]);

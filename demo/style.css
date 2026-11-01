@@ -58,8 +58,14 @@ header p { margin: 0 0 16px; color: var(--muted); }
 .variants li button[aria-pressed="true"] { border-left-color: var(--accent); background: var(--sunk); }
 .variants li img, .variants .noicon { flex: none; width: 24px; height: 24px; object-fit: contain; }
 .variants .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the game's colours for Adaptium, Blastons and Cosmix */
 .variants .style { flex: none; width: 18px; height: 18px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; color: #fff; }
-.style-a { background: #2f9e5b; } .style-b { background: #d0473c; } .style-c { background: #3d6fd6; }
+.style.style-a { background: #2f6fd6; } .style.style-b { background: #d0473c; } .style.style-c { background: #f2c230; color: #2a2000; }
+.stage-label .style-a { color: #2f6fd6; } .stage-label .style-b { color: #d0473c; } .stage-label .style-c { color: #b38600; }
+.stage-label strong { display: inline-flex; align-items: center; gap: 6px; }
+.stage-label img { width: 20px; height: 20px; object-fit: contain; }
+.variants li.row { display: flex; align-items: center; gap: 8px; padding: 3px 12px 3px 15px; font-size: 14px; }
+.variants .note { color: var(--muted); font-size: 12px; }
 .variants .level { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .stage-row.with-variants { grid-template-columns: minmax(0, 1fr); }

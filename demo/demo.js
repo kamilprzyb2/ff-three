@@ -22,7 +22,7 @@ async function open(item, { updateUrl = true, npc } = {}) {
   const mine = ++token;
   if (current) { current.dispose(); current = null; }
   controls.replaceChildren();
-  clearVariants();
+  clearPanel();
   status("Loading…");
   if (updateUrl && item.query) history.replaceState(null, "", "?" + item.query);
   try {
@@ -46,73 +46,92 @@ const keepHitbox = (v) => {
 };
 
 // A mob or NPC model's sizes: the NPC rows that use it (files.json's
-// `npcs`, from the pack's tables.json) by the model's scale (m_fScale) and
-// the hitbox (m_iRadius, m_iHeight), smallest first. Each is one of the
-// viewer's variants.
-function sizesOf(npcs) {
+// `rows` with a size, from the pack's tables.json) by the model's scale
+// (m_fScale) and the hitbox (m_iRadius, m_iHeight), smallest first. Each is
+// one of the viewer's variants.
+function sizesOf(rows) {
   const sizes = new Map();
-  for (const n of npcs) {
+  for (const n of rows) {
+    if (!n.radius) continue;
     const key = `${n.scale}/${n.radius}/${n.height}`;
-    if (!sizes.has(key)) sizes.set(key, { radius: n.radius, height: n.height, scale: n.scale, npcs: [] });
-    sizes.get(key).npcs.push(n);
+    if (!sizes.has(key)) sizes.set(key, { radius: n.radius, height: n.height, scale: n.scale, rows: [] });
+    sizes.get(key).rows.push(n);
   }
   return [...sizes.values()].sort((a, b) => a.scale - b.scale || a.radius - b.radius || a.height - b.height);
 }
 const num = (v) => String(+v.toFixed(2));
-// a mob's type (m_iNpcStyle), whose nanos it's weak or strong against
-const STYLES = ["Adaptium", "Blastons", "Cosmix"];
-const styleChip = (n) => (STYLES[n.style]
-  ? [el("span", { className: `style style-${"abc"[n.style]}`, textContent: STYLES[n.style][0], title: STYLES[n.style] })] : []);
 const el = (tag, props = {}, children = []) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
 const chips = (s) => [
   el("span", { className: "chip", textContent: `model ×${num(s.scale)}`, title: "The model's scale (m_fScale)" }),
   el("span", { className: "chip", textContent: `hitbox ${num(s.radius)} × ${num(s.height)} m`, title: "The hitbox cylinder's radius and height (m_iRadius, m_iHeight)" }),
 ];
+// a mob's or a nano's type (m_iNpcStyle, m_iStyle), the game's colours
+const STYLES = ["Adaptium", "Blastons", "Cosmix"];
+const styleBadge = (n) => (STYLES[n.style]
+  ? [el("span", { className: `style style-${"abc"[n.style]}`, textContent: "ABC"[n.style], title: STYLES[n.style] })] : []);
+const icon = (n) => (n.icon ? el("img", { src: n.icon, alt: "", loading: "lazy", decoding: "async" }) : el("span", { className: "noicon" }));
 
-// The variants panel beside the stage: the NPCs that use the model, under
-// their sizes; picking one shows the model at its scale with its hitbox. And
-// the label on the stage, naming the one shown.
+// The panel beside the stage: the table rows that use the model. A mob or
+// NPC model's under their sizes, where picking one shows the model at its
+// scale with its hitbox; any other's (eggs, items) as a list. And the label
+// on the stage, naming the NPC shown, or the one row a model has.
 const panel = $("variants"), label = $("stage-label");
-function clearVariants() {
+function clearPanel() {
   panel.hidden = label.hidden = true;
   panel.replaceChildren();
   stage.parentElement.parentElement.classList.remove("with-variants");
 }
-function showVariants(item, viewer, sizes, npcId) {
-  const showLabel = (n, s) => {
-    label.replaceChildren(el("strong", { textContent: n.name }), ...(n.level != null ? [el("span", { textContent: `Lv ${n.level}` })] : []),
-      ...(STYLES[n.style] ? [el("span", { textContent: STYLES[n.style] })] : []), ...chips(s));
-    label.hidden = false;
-  };
+function showLabel(n, s) {
+  label.replaceChildren(el("strong", {}, [...(n.icon && !s ? [icon(n)] : []), n.name]),
+    ...(n.level ? [el("span", { textContent: `Lv ${n.level}` })] : []),
+    ...(STYLES[n.style] ? [el("span", { className: `style-${"abc"[n.style]}`, textContent: STYLES[n.style] })] : []),
+    ...(s ? chips(s) : []));
+  label.hidden = false;
+}
+function showRows(item, viewer, rows, sizes, shown) {
+  if (!sizes.length && rows.length === 1) { showLabel(rows[0]); return; }
+  if (!sizes.length && !rows.length) return;
+  // a name more than once: its rows told apart by their comments
+  const count = new Map();
+  for (const n of rows) count.set(n.name, (count.get(n.name) || 0) + 1);
   const buttons = [];
-  const pick = (n, gi, b) => {
-    viewer.variant(gi);
-    for (const x of buttons) x.setAttribute("aria-pressed", String(x === b));
-    showLabel(n, sizes[gi]);
-    history.replaceState(null, "", `?${item.query}&npc=${n.id}`);
+  const line = (n, gi) => {
+    const parts = [icon(n), el("span", { className: "name", textContent: n.name },
+      count.get(n.name) > 1 && n.note ? [el("span", { className: "note", textContent: ` ${n.note}` })] : []),
+      ...styleBadge(n), ...(n.level ? [el("span", { className: "level", textContent: `Lv ${n.level}` })] : [])];
+    if (gi == null) return el("li", { className: "row", title: n.id != null ? `#${n.id}` : "" }, parts);
+    const b = el("button", { type: "button", title: `NPC ${n.id}` }, parts);
+    b.setAttribute("aria-pressed", String(n === shown));
+    b.addEventListener("click", () => {
+      viewer.variant(gi);
+      for (const x of buttons) x.setAttribute("aria-pressed", String(x === b));
+      showLabel(n, sizes[gi]);
+      history.replaceState(null, "", `?${item.query}&npc=${n.id}`);
+    });
+    buttons.push(b);
+    return el("li", {}, [b]);
   };
+  const plain = rows.filter((n) => !n.radius);
   const groups = sizes.map((s, gi) => el("section", {}, [
-    el("h3", {}, [...chips(s), el("span", { className: "count", textContent: s.npcs.length })]),
-    el("ul", {}, s.npcs.map((n) => {
-      const b = el("button", { type: "button", title: `NPC ${n.id}` }, [
-        n.icon ? el("img", { src: n.icon, alt: "", loading: "lazy", decoding: "async" }) : el("span", { className: "noicon" }),
-        el("span", { className: "name", textContent: n.name }),
-        ...styleChip(n),
-        ...(n.level != null ? [el("span", { className: "level", textContent: `Lv ${n.level}` })] : []),
-      ]);
-      b.setAttribute("aria-pressed", String(n.id === npcId));
-      b.addEventListener("click", () => pick(n, gi, b));
-      buttons.push(b);
-      return el("li", {}, [b]);
-    })),
+    el("h3", {}, [...chips(s), el("span", { className: "count", textContent: s.rows.length })]),
+    el("ul", {}, s.rows.map((n) => line(n, gi))),
   ]));
-  const count = sizes.reduce((c, s) => c + s.npcs.length, 0);
-  panel.replaceChildren(el("h2", {}, ["Variants ", el("span", { textContent: `${count} NPC${count === 1 ? "" : "s"}, ${sizes.length} size${sizes.length === 1 ? "" : "s"}` })]),
-    el("div", { className: "variants-list" }, groups));
+  if (plain.length) {
+    groups.push(el("section", {}, [
+      ...(sizes.length ? [el("h3", {}, ["no hitbox", el("span", { className: "count", textContent: plain.length })])] : []),
+      el("ul", {}, plain.map((n) => line(n, null))),
+    ]));
+  }
+  const npcs = sizes.reduce((c, s) => c + s.rows.length, 0);
+  const plural = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  panel.replaceChildren(el("h2", {}, sizes.length
+    ? ["Variants ", el("span", { textContent: `${plural(npcs, "NPC")}, ${plural(sizes.length, "size")}` })]
+    : ["Used by ", el("span", { textContent: plural(rows.length, "row") })]),
+  el("div", { className: "variants-list" }, groups));
   panel.hidden = false;
   stage.parentElement.parentElement.classList.add("with-variants");
-  const gi = sizes.findIndex((s) => s.npcs.some((n) => n.id === npcId));
-  showLabel(sizes[gi].npcs.find((n) => n.id === npcId), sizes[gi]);
+  if (!shown) return;
+  showLabel(shown, sizes.find((s) => s.rows.includes(shown)));
   // the one shown, in the middle of the list (scrolling only the list, not the page)
   const on = buttons.find((b) => b.getAttribute("aria-pressed") === "true");
   const list = panel.querySelector(".variants-list");
@@ -122,20 +141,20 @@ function showVariants(item, viewer, sizes, npcId) {
 // A model. The boy and girl actors get the player's capsule for a hitbox;
 // mobs and NPCs their variants (opening with `npc`, the NPC's number, or the
 // first at the model's own scale).
-const modelItem = (label, url, clips, npcs) => ({
+const modelItem = (label, url, clips, rows = []) => ({
   label, title: url, key: `model:${url}`, query: `model=${encodeURIComponent(url)}${clips === "pack" ? "&clips=pack" : ""}`,
   async open({ npc } = {}) {
-    const sizes = npcs && npcs.length ? sizesOf(npcs) : [];
-    const all = sizes.flatMap((s) => s.npcs);
-    const first = all.find((n) => n.id === npc) || (sizes.find((s) => s.scale === 1) || sizes[0] || { npcs: [] }).npcs[0];
-    const variant = sizes.findIndex((s) => s.npcs.includes(first));
+    const sizes = sizesOf(rows);
+    const all = sizes.flatMap((s) => s.rows);
+    const first = all.find((n) => n.id === npc) || (sizes.find((s) => s.scale === 1) || sizes[0] || { rows: [] }).rows[0];
+    const variant = sizes.findIndex((s) => s.rows.includes(first));
     const viewer = await mountModel(stage, url, {
       controls, hitboxOn, onHitbox: keepHitbox,
       hitbox: /\/avatar\/actor\/[^/]+\/[^/]+\.glb$/i.test(url) ? "player" : sizes.length ? sizes : null,
       ...(sizes.length ? { variant, variantPicker: false } : {}),
       ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
     });
-    if (sizes.length) viewer.shown = () => showVariants(this, viewer, sizes, first.id);
+    viewer.shown = () => showRows(this, viewer, rows, sizes, first);
     return viewer;
   },
 });
@@ -180,10 +199,8 @@ function addModel(m) {
     else if (folder.startsWith("mob_")) { kind = "Mobs"; label = bare(folder, "mob_"); }
     else if (folder.startsWith("npc_")) { kind = "NPCs"; label = bare(folder, "npc_"); }
     else { kind = "Other models"; label = folder.replace(/_/g, " "); }
-    // the in-game names (the pack's tables): a few, then how many more
-    const item = m.names && m.names.length
-      ? modelItem(m.names.slice(0, 3).join(", ") + (m.names.length > 3 ? ` +${m.names.length - 3}` : ""), m.url, m.clips, m.npcs)
-      : modelItem(named(label), m.url, m.clips, m.npcs);
+    // by the asset's name (the in-game names are in the panel), found by either
+    const item = modelItem(named(label), m.url, m.clips, m.rows);
     item.folder = named(label);
     item.icon = m.icon || null;
     item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();

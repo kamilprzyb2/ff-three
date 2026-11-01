@@ -26,56 +26,63 @@ export const ICON_PREFIXES = ["wpnicon", "nanoicon", "skillicon", "cosicon", "np
 
 // The in-game names and icons of the models a sub-pack's tables.json names
 // (ff-unpack copies the client's XDT tables): Map of "<model folder>" and
-// "<model folder>/<variant>" (lower case) → { names, icon, npcs }: the
-// names in table order, the icon file of the first row with one, and, for
-// the NPC table, each NPC row's { id, name, level, style, icon, radius,
-// height, scale } (style: a mob's m_iNpcStyle, 0 Adaptium, 1 Blastons,
-// 2 Cosmix, null for friendly NPCs (m_iTeam 1); m_iRadius and m_iHeight in
-// metres, m_fScale the model's). Every
-// table works the same way: a row's m_iMesh picks a mesh row, whose
-// m_pstrMMeshModelString (and m_pstrFMeshModelString) is the model's
-// folder and whose m_pstrMTextureString names the variant (or, where it
-// has none, the row its m_iTexture picks: ff-unpack names a variant's file
-// after its first texture); and
-// its m_i…Name (m_iNpcName, m_iNanoName, m_iItemName, …) a string row,
-// whose m_strName is its name; its m_iIcon1 (items: m_iIcon) picks an icon
-// row, { m_iIconNumber, m_iIconType }, naming its icon file.
+// "<model folder>/<variant>" (lower case) → { names, icon, rows }: the
+// names in table order, the icon file of the first row with one, and every
+// row that uses the model, { id, name, icon, note, level, style } and, for
+// NPCs, { radius, height, scale } (m_iRadius and m_iHeight in metres,
+// m_fScale the model's). `note` is the string row's m_strComment1 (it tells
+// apart rows with one name, such as Coco's Eggs); `level` an NPC's
+// m_iNpcLevel or an item's m_iMinReqLev; `style` a mob's m_iNpcStyle or a
+// nano's m_iStyle, 0 Adaptium, 1 Blastons, 2 Cosmix (null for friendly NPCs,
+// m_iTeam 1). Every table works the same way: a row's m_iMesh picks a mesh
+// row, whose m_pstrMMeshModelString (and m_pstrFMeshModelString) is the
+// model's folder and whose m_pstrMTextureString names the variant (or, where
+// it has none, the row its m_iTexture picks: ff-unpack names a variant's
+// file after its first texture); its m_i…Name (m_iNpcName, m_iNanoName,
+// m_iItemName, …) a string row, whose m_strName is its name; and its
+// m_iIcon1 (items: m_iIcon) an icon row, { m_iIconNumber, m_iIconType },
+// naming its icon file.
 export function packNames(tables) {
   const names = new Map();
+  const text = (v) => (typeof v === "string" && v.trim() && v.trim() !== "null" ? v.trim() : null);
   for (const table of Object.values(tables || {})) {
     const lists = Object.entries(table || {});
-    const data = lists.find(([k]) => k.endsWith("Data") && !/Mesh|String/.test(k));
+    const data = lists.find(([k]) => k.endsWith("Data") && !/Mesh|String|Icon/.test(k));
     const meshes = (lists.find(([k]) => k.endsWith("MeshData")) || [])[1];
     const strings = (lists.find(([k]) => k.endsWith("StringData")) || [])[1] || [];
     const icons = (lists.find(([k]) => k.endsWith("IconData")) || [])[1] || [];
     if (!data || !meshes) continue;
     for (const row of data[1]) {
-      const nameKey = Object.keys(row).find((k) => /^m_i\w*Name$/.test(k));
       const mesh = meshes[row.m_iMesh];
-      let name = nameKey && strings[row[nameKey]] && strings[row[nameKey]].m_strName;
-      if (name === "null") name = null;
+      if (!mesh) continue;
+      const keys = Object.keys(row);
+      const idKey = keys.find((k) => /^m_i\w*(Number|ID)$/.test(k));
+      const nameKey = keys.find((k) => /^m_i\w*Name$/.test(k));
+      const str = (nameKey && strings[row[nameKey]]) || {};
+      const id = idKey ? row[idKey] : null;
       // NPCs have sizes (and are listed by number where the tables have no names)
-      const npc = row.m_iRadius ? { id: row.m_iNpcNumber, name: name || `NPC ${row.m_iNpcNumber}`, level: row.m_iNpcLevel ?? null,
-        style: row.m_iTeam === 2 && row.m_iNpcStyle != null ? row.m_iNpcStyle : null, icon: null, radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 } : null;
-      if (!mesh || !(name || npc)) continue;
-      const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
-      const tex = (mesh.m_pstrMTextureString && mesh.m_pstrMTextureString !== "null" && mesh.m_pstrMTextureString)
-        || (texRow && texRow.m_pstrMTextureString);
+      const name = text(str.m_strName) || (row.m_iRadius ? `NPC ${id}` : null);
+      if (!name) continue;
       const iconRow = icons[row.m_iIcon1 ?? row.m_iIcon];
       const prefix = iconRow && (row.m_iIcon1 ?? row.m_iIcon) ? ICON_PREFIXES[iconRow.m_iIconType] : null;
       const icon = prefix ? `${prefix}_${String(iconRow.m_iIconNumber).padStart(2, "0")}.png` : null;
-      if (npc) npc.icon = icon;
-      const add = (key) => {
-        if (!names.has(key)) names.set(key, { names: [], icon: null, npcs: [] });
+      const style = row.m_iNpcStyle != null ? (row.m_iTeam === 2 ? row.m_iNpcStyle : null) : row.m_iStyle ?? null;
+      const entryRow = { id, name, icon, note: text(str.m_strComment1), level: row.m_iNpcLevel ?? row.m_iMinReqLev ?? null, style };
+      if (row.m_iRadius) Object.assign(entryRow, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 });
+      const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
+      const tex = text(mesh.m_pstrMTextureString) || (texRow && text(texRow.m_pstrMTextureString));
+      const where = new Set();
+      for (const model of [text(mesh.m_pstrMMeshModelString), text(mesh.m_pstrFMeshModelString)]) {
+        if (!model) continue;
+        where.add(model.toLowerCase());
+        if (tex) where.add(`${model}/${tex}`.toLowerCase());
+      }
+      for (const key of where) {
+        if (!names.has(key)) names.set(key, { names: [], icon: null, rows: [] });
         const entry = names.get(key);
-        if (name && !entry.names.includes(name)) entry.names.push(name);
+        if (!row.m_iRadius || text(str.m_strName)) { if (!entry.names.includes(name)) entry.names.push(name); }
         if (!entry.icon && icon) entry.icon = icon;
-        if (npc) entry.npcs.push(npc);
-      };
-      for (const model of [mesh.m_pstrMMeshModelString, mesh.m_pstrFMeshModelString]) {
-        if (!model || model === "null") continue;
-        add(model.toLowerCase());
-        if (tex && tex !== "null") add(`${model}/${tex}`.toLowerCase());
+        entry.rows.push(entryRow);
       }
     }
   }
@@ -84,11 +91,11 @@ export function packNames(tables) {
 
 // What a directory holds, for the demo page: { worlds: [{ url, tiles,
 // areas: [{ name, zone, area }] }], models: [{ url, group, name, clips,
-// names, icon, npcs }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
+// names, icon, rows }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
 // an ff-unpack pack, whose folder is part of its `name` and whose category
 // folder is its `group`; `names` are its in-game names and `icon` the URL of
 // its icon, where the pack's tables.json has them (packNames()) and its
-// icons/ the file; `npcs` the NPC rows that use a mob or NPC model, their
+// icons/ the file; `rows` the table rows that use it (packNames()), their
 // icons URLs too.
 export function indexFiles(root, prefix = "/files/") {
   const worlds = [], models = [];
@@ -150,7 +157,7 @@ export function indexFiles(root, prefix = "/files/") {
         };
         if (known.names.length) entry.names = known.names;
         if (iconUrl(known.icon)) entry.icon = iconUrl(known.icon);
-        if (known.npcs.length) entry.npcs = known.npcs.map((n) => ({ ...n, icon: iconUrl(n.icon) }));
+        if (known.rows.length) entry.rows = known.rows.map((n) => ({ ...n, icon: iconUrl(n.icon) }));
       }
       models.push(entry);
     }
