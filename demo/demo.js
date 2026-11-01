@@ -190,18 +190,20 @@ function addModel(m) {
   const tail = parts.slice(-2).join("/");
   if (folder && (tail === "models/mob" || tail === "models/nano" || tail === "avatar/wear" || tail === "avatar/actor")) {
     const source = parts.slice(0, -2).join("/") || "(top)";
-    const named = (name) => (variant === "default" || variant === folder ? name : `${name} · ${variant}`);
-    let kind, label;
-    if (tail === "models/nano") { kind = "Nanos"; label = bare(folder, "nano_"); }
-    else if (tail === "avatar/actor") { kind = "Characters"; label = { m: "boy", w: "girl" }[folder] || folder; }
-    else if (tail === "avatar/wear") { kind = `Wear: ${WEAR[folder.split("_")[0]] || "other"}`; label = folder.replace(/_/g, " "); }
-    else if (folder.startsWith("fusion_")) { kind = "Fusions"; label = bare(folder, "fusion_"); }
-    else if (folder.startsWith("mob_")) { kind = "Mobs"; label = bare(folder, "mob_"); }
-    else if (folder.startsWith("npc_")) { kind = "NPCs"; label = bare(folder, "npc_"); }
-    else { kind = "Other models"; label = folder.replace(/_/g, " "); }
-    // by the asset's name (the in-game names are in the panel), found by either
-    const item = modelItem(named(label), m.url, m.clips, m.rows);
-    item.folder = named(label);
+    let kind, prefix = "", label;
+    if (tail === "models/nano") { kind = "Nanos"; prefix = "nano_"; }
+    else if (tail === "avatar/actor") { kind = "Characters"; label = { m: "boy", w: "girl" }[folder]; }
+    else if (tail === "avatar/wear") kind = `Wear: ${WEAR[folder.split("_")[0]] || "other"}`;
+    else if (folder.startsWith("fusion_")) { kind = "Fusions"; prefix = "fusion_"; }
+    else if (folder.startsWith("mob_")) { kind = "Mobs"; prefix = "mob_"; }
+    else if (folder.startsWith("npc_")) { kind = "NPCs"; prefix = "npc_"; }
+    else kind = "Other models";
+    label = label || bare(folder, prefix);
+    // by the asset's name: a texture variant's own (its model's folder is in
+    // the search and, where two variants share a name, in brackets); the
+    // in-game names are in the panel, and found by the filter
+    const item = modelItem(variant === "default" || variant === folder ? label : bare(variant, prefix), m.url, m.clips, m.rows);
+    item.folder = label;
     item.icon = m.icon || null;
     item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();
     add(source, kind, item);
@@ -393,10 +395,17 @@ try {
     for (const m of index.models) addModel(m);
     for (const kinds of sources.values()) {
       for (const items of kinds.values()) {
-        // two items with the same names (variants the tables don't tell apart): add the folder
-        const count = new Map();
-        for (const it of items) count.set(it.label, (count.get(it.label) || 0) + 1);
-        for (const it of items) if (it.folder && count.get(it.label) > 1 && it.label !== it.folder) it.label += ` (${it.folder})`;
+        // one texture on several models (a face on both face types): add the
+        // words of the model's folder the others' don't share
+        const same = new Map();
+        for (const it of items) if (it.folder) same.set(it.label, [...(same.get(it.label) || []), it]);
+        for (const group of same.values()) {
+          if (group.length < 2) continue;
+          const words = group.map((it) => it.folder.split(" "));
+          const shared = words[0].filter((w) => words.every((ws) => ws.includes(w)));
+          // (the model named like the texture keeps the bare name)
+          group.forEach((it, i) => { if (it.label !== it.folder) it.label += ` (${words[i].filter((w) => !shared.includes(w)).join(" ") || it.folder})`; });
+        }
         items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
       }
     }
