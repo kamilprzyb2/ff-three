@@ -20,13 +20,95 @@ const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { retu
 // metres, x east, y north).
 export const areaOf = (a) => [Math.floor(a.x / 512), Math.floor(a.y / 512), Math.ceil((a.x + a.width) / 512) - 1, Math.ceil((a.y + a.height) / 512) - 1];
 
+// The client's icon files by m_iIconType (AvatarUtil): <prefix>_<number, two digits>.png
+export const ICON_PREFIXES = ["wpnicon", "nanoicon", "skillicon", "cosicon", "npcicon", "nanoready", "questitemicon",
+  "generalitemicon", "mobicon", "fusionicon", "hnpcicon", "transport", "vehicle"];
+
+// The in-game names and icons of the models a sub-pack's tables.json names
+// (ff-unpack copies the client's XDT tables): Map of "<model folder>" and
+// "<model folder>/<variant>" (lower case) → { names, icon, rows }: the
+// names in table order, the icon file of the first row with one, and every
+// row that uses the model, { id, name, icon, note, level, style } and, for
+// NPCs, { radius, height, scale } (m_iRadius and m_iHeight in metres,
+// m_fScale the model's). `note` is the string row's m_strComment1 (it tells
+// apart rows with one name, such as Coco's Eggs); `level` an NPC's
+// m_iNpcLevel or an item's m_iMinReqLev; `style` a mob's m_iNpcStyle or a
+// nano's m_iStyle, 0 Adaptium, 1 Blastons, 2 Cosmix (null for friendly NPCs,
+// m_iTeam 1). Every table works the same way: a row's m_iMesh picks a mesh
+// row, whose m_pstrMMeshModelString (and m_pstrFMeshModelString) is the
+// model's folder and whose m_pstrMTextureString names the variant (or, where
+// it has none, the row its m_iTexture picks: ff-unpack names a variant's
+// file after its first texture); its m_i…Name (m_iNpcName, m_iNanoName,
+// m_iItemName, …) a string row, whose m_strName is its name; and its
+// m_iIcon1 (items: m_iIcon) an icon row, { m_iIconNumber, m_iIconType },
+// naming its icon file.
+export function packNames(tables) {
+  const names = new Map();
+  const text = (v) => (typeof v === "string" && v.trim() && v.trim() !== "null" ? v.trim() : null);
+  for (const table of Object.values(tables || {})) {
+    const lists = Object.entries(table || {});
+    const data = lists.find(([k]) => k.endsWith("Data") && !/Mesh|String|Icon/.test(k));
+    const meshes = (lists.find(([k]) => k.endsWith("MeshData")) || [])[1];
+    const strings = (lists.find(([k]) => k.endsWith("StringData")) || [])[1] || [];
+    const icons = (lists.find(([k]) => k.endsWith("IconData")) || [])[1] || [];
+    if (!data || !meshes) continue;
+    for (const row of data[1]) {
+      const mesh = meshes[row.m_iMesh];
+      if (!mesh) continue;
+      const keys = Object.keys(row);
+      const idKey = keys.find((k) => /^m_i\w*(Number|ID)$/.test(k));
+      const nameKey = keys.find((k) => /^m_i\w*Name$/.test(k));
+      const str = (nameKey && strings[row[nameKey]]) || {};
+      const id = idKey ? row[idKey] : null;
+      // NPCs have sizes (and are listed by number where the tables have no names)
+      const name = text(str.m_strName) || (row.m_iRadius ? `NPC ${id}` : null);
+      if (!name) continue;
+      const iconRow = icons[row.m_iIcon1 ?? row.m_iIcon];
+      const prefix = iconRow && (row.m_iIcon1 ?? row.m_iIcon) ? ICON_PREFIXES[iconRow.m_iIconType] : null;
+      const icon = prefix ? `${prefix}_${String(iconRow.m_iIconNumber).padStart(2, "0")}.png` : null;
+      const style = row.m_iNpcStyle != null ? (row.m_iTeam === 2 ? row.m_iNpcStyle : null) : row.m_iStyle ?? null;
+      const entryRow = { id, name, icon, note: text(str.m_strComment1), level: row.m_iNpcLevel ?? row.m_iMinReqLev ?? null, style };
+      if (row.m_iRadius) Object.assign(entryRow, { radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 });
+      const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
+      const tex = text(mesh.m_pstrMTextureString) || (texRow && text(texRow.m_pstrMTextureString));
+      const where = new Set();
+      for (const model of [text(mesh.m_pstrMMeshModelString), text(mesh.m_pstrFMeshModelString)]) {
+        if (!model) continue;
+        where.add(model.toLowerCase());
+        if (tex) where.add(`${model}/${tex}`.toLowerCase());
+      }
+      for (const key of where) {
+        if (!names.has(key)) names.set(key, { names: [], icon: null, rows: [] });
+        const entry = names.get(key);
+        if (!row.m_iRadius || text(str.m_strName)) { if (!entry.names.includes(name)) entry.names.push(name); }
+        if (!entry.icon && icon) entry.icon = icon;
+        entry.rows.push(entryRow);
+      }
+    }
+  }
+  return names;
+}
+
 // What a directory holds, for the demo page: { worlds: [{ url, tiles,
-// areas: [{ name, zone, area }] }], models: [{ url, group, name, clips }] }, URLs
-// under `prefix`. `clips` is "pack" for a prefab in an ff-unpack pack,
-// whose folder is part of its `name` and whose category folder is its `group`.
+// areas: [{ name, zone, area }] }], models: [{ url, group, name, clips,
+// names, icon, rows }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
+// an ff-unpack pack, whose folder is part of its `name` and whose category
+// folder is its `group`; `names` are its in-game names and `icon` the URL of
+// its icon, where the pack's tables.json has them (packNames()) and its
+// icons/ the file; `rows` the table rows that use it (packNames()), their
+// icons URLs too.
 export function indexFiles(root, prefix = "/files/") {
   const worlds = [], models = [];
   const url = (rel) => prefix + rel.split(path.sep).map(encodeURIComponent).join("/");
+  const namesIn = new Map(); // sub-pack → packNames()
+  const namesOf = (packRoot) => {
+    if (!namesIn.has(packRoot)) {
+      let tables = null;
+      try { tables = JSON.parse(fs.readFileSync(path.join(root, packRoot, "tables.json"), "utf8")); } catch { /* none */ }
+      namesIn.set(packRoot, packNames(tables));
+    }
+    return namesIn.get(packRoot);
+  };
   // packRoot: the relative path of the ff-unpack sub-pack (a folder with a
   // manifest.json) the walk is in; its files are <category>/<prefab>/<file>
   const walk = (dir, rel, depth, packRoot) => {
@@ -63,7 +145,21 @@ export function indexFiles(root, prefix = "/files/") {
       // a pack prefab's folder is part of its name; its category folder is the group
       const group = (inPack ? parts.slice(0, -1) : parts).join("/");
       const name = inPack ? `${parts[parts.length - 1]}/${n}` : n;
-      models.push({ url: url(r), group, name, clips: hasClips ? "pack" : null });
+      const entry = { url: url(r), group, name, clips: hasClips ? "pack" : null };
+      // the variant's own names, else the model's
+      const folder = parts[parts.length - 1].toLowerCase(), variant = n.slice(0, -4).toLowerCase();
+      const known = inPack ? namesOf(packRoot).get(`${folder}/${variant}`) || namesOf(packRoot).get(folder) : null;
+      if (known) {
+        // the pack's icons/ sits beside its sub-packs
+        const iconUrl = (file) => {
+          const iconRel = file && path.normalize(path.join(packRoot, "..", "icons", file));
+          return iconRel && fs.existsSync(path.join(root, iconRel)) ? url(iconRel) : null;
+        };
+        if (known.names.length) entry.names = known.names;
+        if (iconUrl(known.icon)) entry.icon = iconUrl(known.icon);
+        if (known.rows.length) entry.rows = known.rows.map((n) => ({ ...n, icon: iconUrl(n.icon) }));
+      }
+      models.push(entry);
     }
   };
   walk(root, "", 0, null);

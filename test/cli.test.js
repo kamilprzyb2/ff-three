@@ -87,12 +87,40 @@ test("the demo server lists models and worlds with their named areas", async () 
     { name: "Orchid Bay", zone: "Downtown", x: 2048, y: 1024, width: 512, height: 512 },
     { name: "Elsewhere", zone: "Nowhere", x: 7680, y: 7680, width: 512, height: 512 },
   ]));
+  // the client's tables: NPCs 1 and 2 use the drum (1 a Blastons mob, 2 a bigger friendly NPC with no icon), hat 1 and 2 the same model in two textures
+  put("pack/models/tables.json", JSON.stringify({ m_pNpcTable: {
+    m_pNpcData: [{},
+      { m_iNpcNumber: 1, m_iNpcName: 1, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 3, m_iTeam: 2, m_iNpcStyle: 1, m_iRadius: 60, m_iHeight: 250, m_fScale: 1, m_iIcon1: 1 },
+      { m_iNpcNumber: 2, m_iNpcName: 2, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 9, m_iTeam: 1, m_iNpcStyle: 0, m_iRadius: 90, m_iHeight: 375, m_fScale: 1.5, m_iIcon1: 0 }],
+    m_pNpcMeshData: [{}, { m_pstrMMeshModelString: "drum", m_pstrMTextureString: "drum" }],
+    m_pNpcStringData: [{}, { m_strName: "Barrel Buster" }, { m_strName: "Giant Barrel Buster" }],
+    m_pNpcIconData: [{}, { m_iIconNumber: 5, m_iIconType: 8 }],
+  } }));
+  put("pack/icons/mobicon_05.png");
+  put("pack/avatar/tables.json", JSON.stringify({ m_pHatItemTable: {
+    m_pItemData: [{}, { m_iItemNumber: 1, m_iItemName: 1, m_iMesh: 1, m_iTexture: 0, m_iMinReqLev: 4 }, { m_iItemNumber: 2, m_iItemName: 2, m_iMesh: 2, m_iTexture: 0 }],
+    m_pItemMeshData: [{}, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat" }, { m_pstrMMeshModelString: "hat", m_pstrMTextureString: "hat_b" }],
+    m_pItemStringData: [{}, { m_strName: "Fox Hat", m_strComment1: "red" }, { m_strName: "Bear Hat", m_strComment1: " " }],
+  } }));
+  put("pack/avatar/wear/hat/hat_b.glb");
   const index = indexFiles(root, "/files/");
-  assert.deepEqual(index.models.map((m) => [m.url, m.group, m.name, m.clips]), [
-    ["/files/loose/grim.glb", "loose", "grim.glb", null],
-    ["/files/pack/avatar/wear/hat/hat.glb", "pack/avatar/wear", "hat/hat.glb", null],
-    ["/files/pack/models/mob/drum/drum.glb", "pack/models/mob", "drum/drum.glb", "pack"],
+  assert.deepEqual(index.models.map((m) => [m.url, m.group, m.name, m.clips, m.names]), [
+    ["/files/loose/grim.glb", "loose", "grim.glb", null, undefined],
+    // each texture variant named by the items that use it
+    ["/files/pack/avatar/wear/hat/hat.glb", "pack/avatar/wear", "hat/hat.glb", null, ["Fox Hat"]],
+    ["/files/pack/avatar/wear/hat/hat_b.glb", "pack/avatar/wear", "hat/hat_b.glb", null, ["Bear Hat"]],
+    ["/files/pack/models/mob/drum/drum.glb", "pack/models/mob", "drum/drum.glb", "pack", ["Barrel Buster", "Giant Barrel Buster"]],
   ]);
+  const drum = index.models.find((m) => m.name === "drum/drum.glb");
+  assert.equal(drum.icon, "/files/pack/icons/mobicon_05.png");
+  // the NPCs that use it, with their sizes in metres, for the hitbox and the variants
+  assert.deepEqual(drum.rows, [
+    { id: 1, name: "Barrel Buster", icon: "/files/pack/icons/mobicon_05.png", note: null, level: 3, style: 1, radius: 0.6, height: 2.5, scale: 1 },
+    { id: 2, name: "Giant Barrel Buster", icon: null, note: null, level: 9, style: null, radius: 0.9, height: 3.75, scale: 1.5 },
+  ]);
+  // other tables' rows: no sizes; the comment that tells apart two of one name
+  assert.deepEqual(index.models.find((m) => m.name === "hat/hat.glb").rows,
+    [{ id: 1, name: "Fox Hat", icon: null, note: "red", level: 4, style: null }]);
   assert.equal(index.worlds.length, 1);
   assert.equal(index.worlds[0].url, "/files/pack/world/");
   assert.deepEqual(index.worlds[0].tiles.sort(), ["03_01", "04_02"]);

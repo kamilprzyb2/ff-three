@@ -1,6 +1,7 @@
 :root { --bg: #edf1f3; --panel: #fff; --sunk: #e3e9ed; --ink: #13202a; --muted: #586a77; --line: #cfd9df; --accent: #1f6feb; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root { --bg: #0b1218; --panel: #111c24; --sunk: #0d171e; --ink: #e2ebf0; --muted: #8fa3b1; --line: #24343f; --accent: #58a6ff; color-scheme: dark; } }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* over the display of .variants and .stage-label */
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; padding: 0 16px 24px; }
 header, main { max-width: 1100px; margin: 0 auto; }
 h1 { margin: 20px 0 4px; font-size: 22px; }
@@ -15,7 +16,7 @@ header p { margin: 0 0 16px; color: var(--muted); }
 .status { color: var(--muted); font-size: 13px; }
 .stage { height: min(70vh, 640px); background: var(--sunk); position: relative; }
 .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.controls { padding: 10px 12px; }
+.controls { padding: 10px 12px; min-height: 52px; } /* a row of controls: the page keeps its height while the next model loads */
 .ff-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ff-input, .ff-button { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; max-width: 100%; }
 .ff-button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
@@ -25,6 +26,48 @@ header p { margin: 0 0 16px; color: var(--muted); }
 .picker label { display: flex; align-items: center; gap: 6px; }
 .picker .grow { flex: 1 1 260px; }
 .picker .grow select { flex: 1; min-width: 0; }
+.picker .field { display: flex; align-items: center; gap: 6px; }
+/* the item list (demo/item-list.js): a button and a listbox with icons */
+.ff-list { position: relative; flex: 1; min-width: 0; }
+.ff-list-button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; }
+.ff-list-button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-list-box { position: absolute; z-index: 10; top: calc(100% + 2px); left: 0; right: 0; max-height: min(60vh, 420px); overflow: auto;
+  margin: 0; padding: 4px 0; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .25); }
+.ff-list-box li { display: flex; align-items: center; gap: 8px; padding: 3px 8px; cursor: pointer; }
+.ff-list-box li.active, .ff-list-box li:hover { background: var(--sunk); }
+.ff-list-icon { flex: none; width: 24px; height: 24px; object-fit: contain; }
 .picker select { max-width: 100%; }
 .picker input { width: 160px; max-width: 100%; }
 .drop { margin-top: 16px; }
+/* the stage, and beside it (below it on narrow screens) the variants panel */
+.stage-row.with-variants { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.stage-box { position: relative; min-width: 0; }
+.stage-label { position: absolute; left: 10px; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.stage-label > * { background: color-mix(in srgb, var(--panel) 85%, transparent); border-radius: 6px; padding: 2px 8px; font-size: 13px; }
+.chip { display: inline-block; white-space: nowrap; font-size: 12px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-variant-numeric: tabular-nums; }
+.stage-label .chip { font-size: 12px; }
+.variants { border-left: 1px solid var(--line); display: flex; flex-direction: column; height: min(70vh, 640px); min-height: 0; }
+.variants h2 { margin: 0; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--line); }
+.variants h2 span { color: var(--muted); font-weight: normal; font-size: 13px; }
+.variants-list { position: relative; overflow: auto; flex: 1; min-height: 0; }
+.variants h3 { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0; padding: 6px 12px; font-size: 12px; font-weight: normal; background: var(--sunk); border-bottom: 1px solid var(--line); }
+.variants h3 .count { margin-left: auto; color: var(--muted); }
+.variants ul { list-style: none; margin: 0; padding: 2px 0; }
+.variants li button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 12px; font: inherit; font-size: 14px; color: var(--ink); background: none; border: 0; border-left: 3px solid transparent; text-align: left; cursor: pointer; }
+.variants li button:hover { background: var(--sunk); }
+.variants li button[aria-pressed="true"] { border-left-color: var(--accent); background: var(--sunk); }
+.variants li img, .variants .noicon { flex: none; width: 24px; height: 24px; object-fit: contain; }
+.variants .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the game's colours for Adaptium, Blastons and Cosmix */
+.variants .style { flex: none; width: 18px; height: 18px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; color: #fff; }
+.style.style-a { background: #2f6fd6; } .style.style-b { background: #d0473c; } .style.style-c { background: #f2c230; color: #2a2000; }
+.stage-label .style-a { color: #2f6fd6; } .stage-label .style-b { color: #d0473c; } .stage-label .style-c { color: #b38600; }
+.stage-label strong { display: inline-flex; align-items: center; gap: 6px; }
+.stage-label img { width: 20px; height: 20px; object-fit: contain; }
+.variants li.row { display: flex; align-items: center; gap: 8px; padding: 3px 12px 3px 15px; font-size: 14px; }
+.variants .note { color: var(--muted); font-size: 12px; }
+.variants .level { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .stage-row.with-variants { grid-template-columns: minmax(0, 1fr); }
+  .variants { border-left: 0; border-top: 1px solid var(--line); height: auto; max-height: 300px; }
+}

@@ -1,13 +1,14 @@
 // The demo page: pick a model or an area from what the server has
 // (cli/serve.mjs --dir) with three dropdowns (source, kind, item), or drop
 // UnityPackFF GLBs and the files they point to. The URL follows the pick:
-// ?model=<url>[&clips=pack] or ?world=<url>&area=tx0,ty0,tx1,ty1.
+// ?model=<url>[&clips=pack][&npc=<number>] or ?world=<url>&area=tx0,ty0,tx1,ty1.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mountModel, packClipUrl } from "../src/model-viewer.js";
 import { mountArea } from "../src/area-viewer.js";
 import { World, createFiles } from "../src/world.js";
 import { tileKey, areaTiles } from "../src/jobs.js";
+import { ItemList } from "./item-list.js";
 
 const DROP = "https://dropped.invalid/";
 const $ = (id) => document.getElementById(id);
@@ -17,26 +18,145 @@ const status = (text) => { $("status").textContent = text; };
 // ---------------------------------------------------------------- viewing
 let current = null, token = 0;
 
-async function open(item, { updateUrl = true } = {}) {
+async function open(item, { updateUrl = true, npc } = {}) {
   const mine = ++token;
   if (current) { current.dispose(); current = null; }
   controls.replaceChildren();
+  clearPanel();
   status("Loading…");
   if (updateUrl && item.query) history.replaceState(null, "", "?" + item.query);
   try {
-    const viewer = await item.open();
+    const viewer = await item.open({ npc });
     if (mine !== token) { viewer.dispose(); return; }
     current = window.ffViewer = viewer;
     status(item.title || item.label);
+    if (viewer.shown) viewer.shown();
   } catch (e) {
     console.error(e);
     if (mine === token) status(`Could not show ${item.label}: ${e.message || e}`);
   }
 }
 
-const modelItem = (label, url, clips) => ({
+// Whether the hitbox shows: kept from model to model, and over reloads.
+let hitboxOn = false;
+try { hitboxOn = localStorage.getItem("ff-three-demo-hitbox") === "1"; } catch { /* no storage */ }
+const keepHitbox = (v) => {
+  hitboxOn = v;
+  try { localStorage.setItem("ff-three-demo-hitbox", v ? "1" : "0"); } catch { /* no storage */ }
+};
+
+// A mob or NPC model's sizes: the NPC rows that use it (files.json's
+// `rows` with a size, from the pack's tables.json) by the model's scale
+// (m_fScale) and the hitbox (m_iRadius, m_iHeight), smallest first. Each is
+// one of the viewer's variants.
+function sizesOf(rows) {
+  const sizes = new Map();
+  for (const n of rows) {
+    if (!n.radius) continue;
+    const key = `${n.scale}/${n.radius}/${n.height}`;
+    if (!sizes.has(key)) sizes.set(key, { radius: n.radius, height: n.height, scale: n.scale, rows: [] });
+    sizes.get(key).rows.push(n);
+  }
+  return [...sizes.values()].sort((a, b) => a.scale - b.scale || a.radius - b.radius || a.height - b.height);
+}
+const num = (v) => String(+v.toFixed(2));
+const el = (tag, props = {}, children = []) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
+const chips = (s) => [
+  el("span", { className: "chip", textContent: `model ×${num(s.scale)}`, title: "The model's scale (m_fScale)" }),
+  el("span", { className: "chip", textContent: `hitbox ${num(s.radius)} × ${num(s.height)} m`, title: "The hitbox cylinder's radius and height (m_iRadius, m_iHeight)" }),
+];
+// a mob's or a nano's type (m_iNpcStyle, m_iStyle), the game's colours
+const STYLES = ["Adaptium", "Blastons", "Cosmix"];
+const styleBadge = (n) => (STYLES[n.style]
+  ? [el("span", { className: `style style-${"abc"[n.style]}`, textContent: "ABC"[n.style], title: STYLES[n.style] })] : []);
+const icon = (n) => (n.icon ? el("img", { src: n.icon, alt: "", loading: "lazy", decoding: "async" }) : el("span", { className: "noicon" }));
+
+// The panel beside the stage: the table rows that use the model. A mob or
+// NPC model's under their sizes, where picking one shows the model at its
+// scale with its hitbox; any other's (eggs, items) as a list. And the label
+// on the stage, naming the NPC shown, or the one row a model has.
+const panel = $("variants"), label = $("stage-label");
+function clearPanel() {
+  panel.hidden = label.hidden = true;
+  panel.replaceChildren();
+  stage.parentElement.parentElement.classList.remove("with-variants");
+}
+function showLabel(n, s) {
+  label.replaceChildren(el("strong", {}, [...(n.icon && !s ? [icon(n)] : []), n.name]),
+    ...(n.level ? [el("span", { textContent: `Lv ${n.level}` })] : []),
+    ...(STYLES[n.style] ? [el("span", { className: `style-${"abc"[n.style]}`, textContent: STYLES[n.style] })] : []),
+    ...(s ? chips(s) : []));
+  label.hidden = false;
+}
+function showRows(item, viewer, rows, sizes, shown) {
+  if (!sizes.length && rows.length === 1) { showLabel(rows[0]); return; }
+  if (!sizes.length && !rows.length) return;
+  // a name more than once: its rows told apart by their comments
+  const count = new Map();
+  for (const n of rows) count.set(n.name, (count.get(n.name) || 0) + 1);
+  const buttons = [];
+  const line = (n, gi) => {
+    const parts = [icon(n), el("span", { className: "name", textContent: n.name },
+      count.get(n.name) > 1 && n.note ? [el("span", { className: "note", textContent: ` ${n.note}` })] : []),
+      ...styleBadge(n), ...(n.level ? [el("span", { className: "level", textContent: `Lv ${n.level}` })] : [])];
+    if (gi == null) return el("li", { className: "row", title: n.id != null ? `#${n.id}` : "" }, parts);
+    const b = el("button", { type: "button", title: `NPC ${n.id}` }, parts);
+    b.setAttribute("aria-pressed", String(n === shown));
+    b.addEventListener("click", () => {
+      viewer.variant(gi);
+      for (const x of buttons) x.setAttribute("aria-pressed", String(x === b));
+      showLabel(n, sizes[gi]);
+      history.replaceState(null, "", `?${item.query}&npc=${n.id}`);
+    });
+    buttons.push(b);
+    return el("li", {}, [b]);
+  };
+  const plain = rows.filter((n) => !n.radius);
+  const groups = sizes.map((s, gi) => el("section", {}, [
+    el("h3", {}, [...chips(s), el("span", { className: "count", textContent: s.rows.length })]),
+    el("ul", {}, s.rows.map((n) => line(n, gi))),
+  ]));
+  if (plain.length) {
+    groups.push(el("section", {}, [
+      ...(sizes.length ? [el("h3", {}, ["no hitbox", el("span", { className: "count", textContent: plain.length })])] : []),
+      el("ul", {}, plain.map((n) => line(n, null))),
+    ]));
+  }
+  const npcs = sizes.reduce((c, s) => c + s.rows.length, 0);
+  const plural = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  panel.replaceChildren(el("h2", {}, sizes.length
+    ? ["Variants ", el("span", { textContent: `${plural(npcs, "NPC")}, ${plural(sizes.length, "size")}` })]
+    : ["Used by ", el("span", { textContent: plural(rows.length, "row") })]),
+  el("div", { className: "variants-list" }, groups));
+  panel.hidden = false;
+  stage.parentElement.parentElement.classList.add("with-variants");
+  if (!shown) return;
+  showLabel(shown, sizes.find((s) => s.rows.includes(shown)));
+  // the one shown, in the middle of the list (scrolling only the list, not the page)
+  const on = buttons.find((b) => b.getAttribute("aria-pressed") === "true");
+  const list = panel.querySelector(".variants-list");
+  if (on) list.scrollTop = on.offsetTop - list.clientHeight / 2;
+}
+
+// A model. The boy and girl actors get the player's capsule for a hitbox;
+// mobs and NPCs their variants (opening with `npc`, the NPC's number, or the
+// first at the model's own scale).
+const modelItem = (label, url, clips, rows = []) => ({
   label, title: url, key: `model:${url}`, query: `model=${encodeURIComponent(url)}${clips === "pack" ? "&clips=pack" : ""}`,
-  open: () => mountModel(stage, url, { controls, ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}) }),
+  async open({ npc } = {}) {
+    const sizes = sizesOf(rows);
+    const all = sizes.flatMap((s) => s.rows);
+    const first = all.find((n) => n.id === npc) || (sizes.find((s) => s.scale === 1) || sizes[0] || { rows: [] }).rows[0];
+    const variant = sizes.findIndex((s) => s.rows.includes(first));
+    const viewer = await mountModel(stage, url, {
+      controls, hitboxOn, onHitbox: keepHitbox,
+      hitbox: /\/avatar\/actor\/[^/]+\/[^/]+\.glb$/i.test(url) ? "player" : sizes.length ? sizes : null,
+      ...(sizes.length ? { variant, variantPicker: false } : {}),
+      ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
+    });
+    viewer.shown = () => showRows(this, viewer, rows, sizes, first);
+    return viewer;
+  },
 });
 
 const areaItem = (label, worldUrl, area, title) => ({
@@ -70,16 +190,23 @@ function addModel(m) {
   const tail = parts.slice(-2).join("/");
   if (folder && (tail === "models/mob" || tail === "models/nano" || tail === "avatar/wear" || tail === "avatar/actor")) {
     const source = parts.slice(0, -2).join("/") || "(top)";
-    const named = (name) => (variant === "default" || variant === folder ? name : `${name} · ${variant}`);
-    let kind, label;
-    if (tail === "models/nano") { kind = "Nanos"; label = bare(folder, "nano_"); }
-    else if (tail === "avatar/actor") { kind = "Characters"; label = { m: "boy", w: "girl" }[folder] || folder; }
-    else if (tail === "avatar/wear") { kind = `Wear: ${WEAR[folder.split("_")[0]] || "other"}`; label = folder.replace(/_/g, " "); }
-    else if (folder.startsWith("fusion_")) { kind = "Fusions"; label = bare(folder, "fusion_"); }
-    else if (folder.startsWith("mob_")) { kind = "Mobs"; label = bare(folder, "mob_"); }
-    else if (folder.startsWith("npc_")) { kind = "NPCs"; label = bare(folder, "npc_"); }
-    else { kind = "Other models"; label = folder.replace(/_/g, " "); }
-    add(source, kind, modelItem(named(label), m.url, m.clips));
+    let kind, prefix = "", label;
+    if (tail === "models/nano") { kind = "Nanos"; prefix = "nano_"; }
+    else if (tail === "avatar/actor") { kind = "Characters"; label = { m: "boy", w: "girl" }[folder]; }
+    else if (tail === "avatar/wear") kind = `Wear: ${WEAR[folder.split("_")[0]] || "other"}`;
+    else if (folder.startsWith("fusion_")) { kind = "Fusions"; prefix = "fusion_"; }
+    else if (folder.startsWith("mob_")) { kind = "Mobs"; prefix = "mob_"; }
+    else if (folder.startsWith("npc_")) { kind = "NPCs"; prefix = "npc_"; }
+    else kind = "Other models";
+    label = label || bare(folder, prefix);
+    // by the asset's name: a texture variant's own (its model's folder is in
+    // the search and, where two variants share a name, in brackets); the
+    // in-game names are in the panel, and found by the filter
+    const item = modelItem(variant === "default" || variant === folder ? label : bare(variant, prefix), m.url, m.clips, m.rows);
+    item.folder = label;
+    item.icon = m.icon || null;
+    item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();
+    add(source, kind, item);
     return;
   }
   add(m.group || "(top)", "Models", modelItem((folder ? `${folder}/` : "") + variant.replace(/\.kfm$/i, ""), m.url, m.clips));
@@ -98,7 +225,7 @@ const KIND_ORDER = ["Areas", "Tiles", "Nanos", "Fusions", "Mobs", "NPCs", "Other
 const kindRank = (k) => { const i = KIND_ORDER.indexOf(k); return i < 0 ? (k.startsWith("Wear") ? 50 : 60) : i; };
 
 // ---------------------------------------------------------------- the dropdowns
-const sourceSel = $("source"), kindSel = $("kind"), itemSel = $("item"), filter = $("filter");
+const sourceSel = $("source"), kindSel = $("kind"), itemSel = new ItemList($("item"), "Item"), filter = $("filter");
 const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
 
 function fillKinds() {
@@ -111,9 +238,9 @@ function fillKinds() {
 function fillItems() {
   const items = (sources.get(sourceSel.value) || new Map()).get(kindSel.value) || [];
   const q = filter.value.trim().toLowerCase();
-  const shown = items.map((it, i) => [it, i]).filter(([it]) => !q || it.label.toLowerCase().includes(q));
-  itemSel.replaceChildren(option("", shown.length ? `Pick one of ${shown.length}…` : "Nothing matches"),
-    ...shown.map(([it, i]) => option(i, it.label)));
+  const shown = items.map((it, i) => [it, i]).filter(([it]) => !q || (it.search || it.label.toLowerCase()).includes(q));
+  itemSel.setOptions(shown.length ? `Pick one of ${shown.length}…` : "Nothing matches",
+    shown.map(([it, i]) => ({ value: String(i), label: it.label, icon: it.icon || null, title: it.title })));
 }
 
 function refresh() {
@@ -266,20 +393,36 @@ try {
     const index = await r.json();
     for (const w of index.worlds) addWorld(w);
     for (const m of index.models) addModel(m);
-    for (const kinds of sources.values()) for (const items of kinds.values()) items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    for (const kinds of sources.values()) {
+      for (const items of kinds.values()) {
+        // one texture on several models (a face on both face types): add the
+        // words of the model's folder the others' don't share
+        const same = new Map();
+        for (const it of items) if (it.folder) same.set(it.label, [...(same.get(it.label) || []), it]);
+        for (const group of same.values()) {
+          if (group.length < 2) continue;
+          const words = group.map((it) => it.folder.split(" "));
+          const shared = words[0].filter((w) => words.every((ws) => ws.includes(w)));
+          // (the model named like the texture keeps the bare name)
+          group.forEach((it, i) => { if (it.label !== it.folder) it.label += ` (${words[i].filter((w) => !shared.includes(w)).join(" ") || it.folder})`; });
+        }
+        items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      }
+    }
   }
 } catch {
   // no list: dropping files still works
 }
 refresh();
 
-// ?model= or ?world=&area=: the item the URL names, picked in the dropdowns
+// ?model=[&npc=] or ?world=&area=: the item the URL names, picked in the dropdowns
 // when the list has it
 const q = new URLSearchParams(location.search);
 const wanted = q.get("model")
   ? modelItem(q.get("model").split("/").pop(), q.get("model"), q.get("clips"))
   : q.get("world") && q.get("area") ? areaItem(`area ${q.get("area")}`, q.get("world"), q.get("area").split(",").map(Number)) : null;
 if (wanted) {
-  if (select(wanted.key)) open(sources.get(sourceSel.value).get(kindSel.value)[+itemSel.value], { updateUrl: false });
-  else open(wanted, { updateUrl: false });
+  const npc = q.get("npc") ? Number(q.get("npc")) : undefined;
+  if (select(wanted.key)) open(sources.get(sourceSel.value).get(kindSel.value)[+itemSel.value], { updateUrl: false, npc });
+  else open(wanted, { updateUrl: false, npc });
 }

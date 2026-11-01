@@ -13,6 +13,6 @@ export { playAnimations, clipFromGltf } from "./animation.js";
 export { World, createFiles, loadGlb, setUpScene, createSurroundings, tileOrigin, SEA_LEVEL } from "./world.js";
 export { renderJob, frameArea, groundLevel } from "./render.js";
 export { normalizeJob, areaTiles, areaBounds, tileKey, parseTileKey, TILE_SIZE } from "./jobs.js";
-export { mountModel, splitClipUrl, packClipUrl } from "./model-viewer.js";
+export { mountModel, splitClipUrl, packClipUrl, hitboxObject, hitboxList, PLAYER_HITBOX } from "./model-viewer.js";
 export { mountArea } from "./area-viewer.js";
 export { decodePng } from "./png.js";

@@ -132,9 +132,40 @@ function el(tag, props, children) {
   return e;
 }
 
-// The picker: emote icons, every clip by group, pause, speed, turntable.
-// `menu`: [{ title, hide_weapon, clips: [{ clip, label, icon, then }] }].
-function picker(box, menu, iconUrl, on) {
+// A player's collider: the CharacterController capsule on the client's
+// player containers (radius 0.3 m, 1.6 m tall), the same for everyone.
+export const PLAYER_HITBOX = { label: "player", radius: 0.3, height: 1.6, capsule: true };
+
+// The hitboxes an option gives: "player", one { radius, height, … } or a list.
+export function hitboxList(option) {
+  if (!option) return [];
+  return [].concat(option).map((h) => (h === "player" ? PLAYER_HITBOX : h));
+}
+
+// A hitbox as a wireframe standing on the model's origin, where the game
+// places it: a vertical cylinder for NPCs and mobs (their NPC row's
+// m_iRadius and m_iHeight, in metres), a capsule for players. Its size is
+// the game's whatever the model's scale (the viewer scales the model by the
+// row's m_fScale, as the game does).
+export function hitboxObject({ radius, height, capsule = false }) {
+  const r = radius, h = height;
+  const geometry = capsule
+    ? new THREE.CapsuleGeometry(r, Math.max(h - 2 * r, 0), 4, 16).translate(0, h / 2, 0)
+    : new THREE.CylinderGeometry(r, r, h, 24, 1, true).translate(0, h / 2, 0);
+  const lines = new THREE.LineSegments(new THREE.WireframeGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: 0xffc83d, transparent: true, opacity: 0.85, depthTest: false }));
+  geometry.dispose();
+  lines.renderOrder = 10;
+  lines.raycast = () => {};
+  lines.name = "hitbox";
+  return lines;
+}
+
+// The picker: emote icons, every clip by group, pause, speed, turntable,
+// the variant (when the model has several sizes) and the hitbox. `menu`:
+// [{ title, hide_weapon, clips: [{ clip, label, icon, then }] }];
+// `hitboxes`: hitboxList()'s; `variants`: whether to pick among them.
+function picker(box, menu, iconUrl, on, hitboxes = [], variants = true) {
   const select = el("select", { className: "ff-input", ariaLabel: "Animation" });
   select.append(el("option", { value: "", textContent: "Idle" }));
   const entries = new Map();
@@ -178,13 +209,30 @@ function picker(box, menu, iconUrl, on) {
   turn.setAttribute("aria-pressed", String(on.turntable(null)));
   turn.addEventListener("click", () => turn.setAttribute("aria-pressed", String(on.turntable(turn.getAttribute("aria-pressed") !== "true"))));
 
-  const row = el("div", { className: "ff-row" }, menu.length ? [select, pause, speed, turn] : [turn]);
+  const extra = [];
+  if (hitboxes.length) {
+    // the variants (the model's NPC rows, by size and scale), then the hitbox toggle
+    if (variants && hitboxes.length > 1) {
+      const which = el("select", { className: "ff-input", ariaLabel: "Variant" });
+      hitboxes.forEach((h, i) => which.append(el("option", { value: i, textContent: h.label || `${h.radius} × ${h.height} m`, selected: i === on.variant(null) })));
+      which.addEventListener("change", () => on.variant(+which.value));
+      extra.push(which);
+    }
+    const toggle = el("button", { type: "button", className: "ff-button", textContent: "Hitbox" });
+    toggle.setAttribute("aria-pressed", String(on.hitbox(null)));
+    toggle.title = "The hitbox the game uses: a cylinder for NPCs and mobs, a capsule for players";
+    toggle.addEventListener("click", () => toggle.setAttribute("aria-pressed", String(on.hitbox(toggle.getAttribute("aria-pressed") !== "true"))));
+    extra.unshift(toggle);
+  }
+  const row = el("div", { className: "ff-row" }, [...(menu.length ? [select, pause, speed, turn] : [turn]), ...extra]);
   box.replaceChildren(...(icons.childElementCount ? [icons] : []), row);
   return { idle() { select.value = ""; }, showPaused };
 }
 
 // Mounts the viewer for the GLB at `url` in `stage` (an element; its
-// controls go in options.controls) and resolves to { dispose, gltf }.
+// controls go in options.controls) and resolves to { dispose, gltf,
+// variant(i), hitbox(on) } (the last two as the controls do; null just
+// reads).
 // Options (each can also come from the GLB's root extras):
 //   kind       "player" | "creature" | "item" (framing; default: creature,
 //              or player for ActorSkinCombiner rigs)
@@ -197,6 +245,17 @@ function picker(box, menu, iconUrl, on) {
 //              splitClipUrl; packClipUrl for an ff-unpack pack)
 //   iconUrl    icon → URL for the menu's emote icons
 //   weapon     lay a tall item on its side (weapons hang pointing down)
+//   hitbox     "player", or { radius, height, scale, label } in metres (an NPC
+//              row's m_iRadius and m_iHeight / 100 and its m_fScale), or a
+//              list of them, the model's variants: a "Hitbox" toggle in the
+//              controls and, for a list, a variant picker; the model is
+//              scaled by the variant's `scale`, the hitbox drawn at its size
+//   variant    the variant shown first (default: the first at scale 1)
+//   variantPicker  false leaves the variant picker out of the controls (for a
+//              page with its own, through variant())
+//   hitboxOn   whether the hitbox shows at first (default: no)
+//   onHitbox   called with true or false when the toggle changes (to keep it
+//              for the next model)
 //   loader     a GLTFLoader to use (one with a LoadingManager for dropped files)
 export async function mountModel(stage, url, options = {}) {
   const base = new URL(url, location.href).href;
@@ -249,6 +308,7 @@ export async function mountModel(stage, url, options = {}) {
   if (firstClip) { mixer.clipAction(firstClip).play(); mixer.update(0); }
   const rigid = info.kind === "item";
   const player = info.kind === "player";
+  const hitboxes = hitboxList(info.hitbox);
   const box = new THREE.Box3().setFromObject(pivot, true);
   const size0 = box.getSize(new THREE.Vector3());
   if (rigid && info.weapon && size0.y > Math.max(size0.x, size0.z)) pivot.rotation.z = Math.PI / 2;
@@ -258,9 +318,15 @@ export async function mountModel(stage, url, options = {}) {
   box.setFromObject(pivot, true);
   const body = new THREE.Box3();
   pivot.traverse((o) => { if (o.isSkinnedMesh) body.expandByObject(o, true); });
+  if (box.isEmpty()) {
+    // nothing drawn (a bare skeleton, such as the player actors): frame the
+    // hitbox, or a person's size
+    if (hitboxes.length) box.setFromObject(hitboxObject(hitboxes[0]));
+    else box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1.8, 0.5));
+  }
   if (body.isEmpty()) body.copy(box);
   mixer.stopAllAction();
-  if (!rigid) scene.add(floorShadow(body));
+  if (!rigid) scene.add(floorShadow(body)); // the only mesh in `scene` itself (the model is under pivot)
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -300,6 +366,37 @@ export async function mountModel(stage, url, options = {}) {
   resize();
 
   let speed = 1, paused = reduce, running = true;
+  // The variant (its scale on the model) and the hitbox. The scale it opens
+  // with moves the camera along, so the model is framed; picking another
+  // leaves the camera where it is, so the model visibly grows or shrinks.
+  let shownHitbox = null, scale = 1, hitboxOn = !!info.hitboxOn;
+  let variant = hitboxes.length ? Math.max(0, info.variant ?? hitboxes.findIndex((h) => (h.scale ?? 1) === 1)) : 0;
+  const shadow = scene.children.find((o) => o.isMesh) || null;
+  const shadowAt = shadow ? shadow.position.clone() : null;
+  function setScale(s, moveCamera) {
+    const k = s / scale;
+    scale = s;
+    gltf.scene.scale.setScalar(s);
+    if (shadow) { shadow.scale.setScalar(s); shadow.position.copy(shadowAt).multiplyScalar(s); }
+    if (!moveCamera) {
+      // room to zoom out to a bigger variant
+      orbit.maxDistance = Math.max(orbit.maxDistance, camera.position.distanceTo(orbit.target) * 2.5 * Math.max(k, 1));
+      camera.far = Math.max(camera.far, orbit.maxDistance * 4);
+      camera.updateProjectionMatrix();
+      return;
+    }
+    camera.position.multiplyScalar(k);
+    orbit.target.multiplyScalar(k);
+    orbit.minDistance *= k;
+    orbit.maxDistance *= k;
+    camera.near *= k; camera.far *= k;
+    camera.updateProjectionMatrix();
+    orbit.update();
+  }
+  function drawHitbox() {
+    if (shownHitbox) { pivot.remove(shownHitbox); shownHitbox.geometry.dispose(); shownHitbox.material.dispose(); shownHitbox = null; }
+    if (hitboxOn && hitboxes[variant]) pivot.add(shownHitbox = hitboxObject(hitboxes[variant]));
+  }
   const on = {
     async play(entry, group) {
       if (weapon) weapon.visible = !group.hide_weapon;
@@ -311,9 +408,28 @@ export async function mountModel(stage, url, options = {}) {
     togglePause() { paused = !paused; return paused; },
     speed(s) { speed = s; },
     turntable(v) { if (v !== null) orbit.autoRotate = v; return orbit.autoRotate; },
+    // on or off (null: just say which)
+    hitbox(v) {
+      if (v !== null && v !== hitboxOn) {
+        hitboxOn = v;
+        drawHitbox();
+        if (info.onHitbox) info.onHitbox(v);
+      }
+      return hitboxOn;
+    },
+    // the variant by index (null: just say which)
+    variant(i) {
+      if (i !== null && hitboxes[i]) {
+        variant = i;
+        setScale(hitboxes[i].scale ?? 1, false);
+        drawHitbox();
+      }
+      return variant;
+    },
   };
   const menu = info.menu || (names.length > 1 ? [{ title: "Clips", hide_weapon: false, clips: names.map((n) => ({ clip: n, label: n, then: "loop" })) }] : []);
-  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on);
+  if (hitboxes.length) { setScale(hitboxes[variant].scale ?? 1, true); drawHitbox(); }
+  if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on, hitboxes, info.variantPicker !== false);
 
   if (anim.first) await anim.idle();
   mixer.update(0);
@@ -336,6 +452,8 @@ export async function mountModel(stage, url, options = {}) {
 
   return {
     gltf,
+    variant: (i) => on.variant(i),
+    hitbox: (v) => on.hitbox(v),
     dispose() {
       running = false;
       renderer.setAnimationLoop(null);
@@ -353,6 +471,7 @@ export async function mountModel(stage, url, options = {}) {
       for (const p of gltf.parser.associations.keys()) if (p && p.isTexture) p.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
+      renderer.domElement.remove(); // a lost context draws a broken-image icon
     },
   };
 }
