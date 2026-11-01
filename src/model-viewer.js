@@ -144,11 +144,11 @@ export function hitboxList(option) {
 
 // A hitbox as a wireframe standing on the model's origin, where the game
 // places it: a vertical cylinder for NPCs and mobs (their NPC row's
-// m_iRadius and m_iHeight, in metres), a capsule for players. In game the
-// model is scaled by its NPC row's m_fScale and the hitbox isn't, so it's
-// drawn divided by `scale` to sit right against the unscaled model.
-export function hitboxObject({ radius, height, capsule = false, scale = 1 }) {
-  const r = radius / scale, h = height / scale;
+// m_iRadius and m_iHeight, in metres), a capsule for players. Its size is
+// the game's whatever the model's scale (the viewer scales the model by the
+// row's m_fScale, as the game does).
+export function hitboxObject({ radius, height, capsule = false }) {
+  const r = radius, h = height;
   const geometry = capsule
     ? new THREE.CapsuleGeometry(r, Math.max(h - 2 * r, 0), 4, 16).translate(0, h / 2, 0)
     : new THREE.CylinderGeometry(r, r, h, 24, 1, true).translate(0, h / 2, 0);
@@ -162,8 +162,9 @@ export function hitboxObject({ radius, height, capsule = false, scale = 1 }) {
 }
 
 // The picker: emote icons, every clip by group, pause, speed, turntable,
-// and the hitbox. `menu`: [{ title, hide_weapon, clips: [{ clip, label,
-// icon, then }] }]; `hitboxes`: hitboxList()'s.
+// the variant (when the model has several sizes) and the hitbox. `menu`:
+// [{ title, hide_weapon, clips: [{ clip, label, icon, then }] }];
+// `hitboxes`: hitboxList()'s.
 function picker(box, menu, iconUrl, on, hitboxes = []) {
   const select = el("select", { className: "ff-input", ariaLabel: "Animation" });
   select.append(el("option", { value: "", textContent: "Idle" }));
@@ -210,17 +211,18 @@ function picker(box, menu, iconUrl, on, hitboxes = []) {
 
   const extra = [];
   if (hitboxes.length) {
-    // off by default; a list when the model's NPC rows differ in size
-    const which = el("select", { className: "ff-input", ariaLabel: "Hitbox" });
-    hitboxes.forEach((h, i) => which.append(el("option", { value: i, textContent: h.label || `${h.radius} × ${h.height} m` })));
+    // the variants (the model's NPC rows, by size and scale), then the hitbox toggle
+    if (hitboxes.length > 1) {
+      const which = el("select", { className: "ff-input", ariaLabel: "Variant" });
+      hitboxes.forEach((h, i) => which.append(el("option", { value: i, textContent: h.label || `${h.radius} × ${h.height} m`, selected: i === on.variant(null) })));
+      which.addEventListener("change", () => on.variant(+which.value));
+      extra.push(which);
+    }
     const toggle = el("button", { type: "button", className: "ff-button", textContent: "Hitbox" });
-    toggle.setAttribute("aria-pressed", "false");
+    toggle.setAttribute("aria-pressed", String(on.hitbox(null)));
     toggle.title = "The hitbox the game uses: a cylinder for NPCs and mobs, a capsule for players";
-    const show = () => on.hitbox(toggle.getAttribute("aria-pressed") === "true" ? +which.value : null);
-    toggle.addEventListener("click", () => { toggle.setAttribute("aria-pressed", String(toggle.getAttribute("aria-pressed") !== "true")); show(); });
-    which.addEventListener("change", show);
-    extra.push(toggle);
-    if (hitboxes.length > 1) extra.push(which);
+    toggle.addEventListener("click", () => toggle.setAttribute("aria-pressed", String(on.hitbox(toggle.getAttribute("aria-pressed") !== "true"))));
+    extra.unshift(toggle);
   }
   const row = el("div", { className: "ff-row" }, [...(menu.length ? [select, pause, speed, turn] : [turn]), ...extra]);
   box.replaceChildren(...(icons.childElementCount ? [icons] : []), row);
@@ -243,7 +245,13 @@ function picker(box, menu, iconUrl, on, hitboxes = []) {
 //   weapon     lay a tall item on its side (weapons hang pointing down)
 //   hitbox     "player", or { radius, height, scale, label } in metres (an NPC
 //              row's m_iRadius and m_iHeight / 100 and its m_fScale), or a
-//              list of them: a "Hitbox" toggle in the controls, off at first
+//              list of them, the model's variants: a "Hitbox" toggle in the
+//              controls and, for a list, a variant picker; the model is
+//              scaled by the variant's `scale`, the hitbox drawn at its size
+//   variant    the variant shown first (default: the first at scale 1)
+//   hitboxOn   whether the hitbox shows at first (default: no)
+//   onHitbox   called with true or false when the toggle changes (to keep it
+//              for the next model)
 //   loader     a GLTFLoader to use (one with a LoadingManager for dropped files)
 export async function mountModel(stage, url, options = {}) {
   const base = new URL(url, location.href).href;
@@ -314,7 +322,7 @@ export async function mountModel(stage, url, options = {}) {
   }
   if (body.isEmpty()) body.copy(box);
   mixer.stopAllAction();
-  if (!rigid) scene.add(floorShadow(body));
+  if (!rigid) scene.add(floorShadow(body)); // the only mesh in `scene` itself (the model is under pivot)
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -354,7 +362,37 @@ export async function mountModel(stage, url, options = {}) {
   resize();
 
   let speed = 1, paused = reduce, running = true;
-  let shownHitbox = null;
+  // The variant (its scale on the model) and the hitbox. The scale it opens
+  // with moves the camera along, so the model is framed; picking another
+  // leaves the camera where it is, so the model visibly grows or shrinks.
+  let shownHitbox = null, scale = 1, hitboxOn = !!info.hitboxOn;
+  let variant = hitboxes.length ? Math.max(0, info.variant ?? hitboxes.findIndex((h) => (h.scale ?? 1) === 1)) : 0;
+  const shadow = scene.children.find((o) => o.isMesh) || null;
+  const shadowAt = shadow ? shadow.position.clone() : null;
+  function setScale(s, moveCamera) {
+    const k = s / scale;
+    scale = s;
+    gltf.scene.scale.setScalar(s);
+    if (shadow) { shadow.scale.setScalar(s); shadow.position.copy(shadowAt).multiplyScalar(s); }
+    if (!moveCamera) {
+      // room to zoom out to a bigger variant
+      orbit.maxDistance = Math.max(orbit.maxDistance, camera.position.distanceTo(orbit.target) * 2.5 * Math.max(k, 1));
+      camera.far = Math.max(camera.far, orbit.maxDistance * 4);
+      camera.updateProjectionMatrix();
+      return;
+    }
+    camera.position.multiplyScalar(k);
+    orbit.target.multiplyScalar(k);
+    orbit.minDistance *= k;
+    orbit.maxDistance *= k;
+    camera.near *= k; camera.far *= k;
+    camera.updateProjectionMatrix();
+    orbit.update();
+  }
+  function drawHitbox() {
+    if (shownHitbox) { pivot.remove(shownHitbox); shownHitbox.geometry.dispose(); shownHitbox.material.dispose(); shownHitbox = null; }
+    if (hitboxOn && hitboxes[variant]) pivot.add(shownHitbox = hitboxObject(hitboxes[variant]));
+  }
   const on = {
     async play(entry, group) {
       if (weapon) weapon.visible = !group.hide_weapon;
@@ -366,12 +404,27 @@ export async function mountModel(stage, url, options = {}) {
     togglePause() { paused = !paused; return paused; },
     speed(s) { speed = s; },
     turntable(v) { if (v !== null) orbit.autoRotate = v; return orbit.autoRotate; },
-    hitbox(index) {
-      if (shownHitbox) { pivot.remove(shownHitbox); shownHitbox.geometry.dispose(); shownHitbox.material.dispose(); shownHitbox = null; }
-      if (index != null && hitboxes[index]) pivot.add(shownHitbox = hitboxObject(hitboxes[index]));
+    // on or off (null: just say which)
+    hitbox(v) {
+      if (v !== null && v !== hitboxOn) {
+        hitboxOn = v;
+        drawHitbox();
+        if (info.onHitbox) info.onHitbox(v);
+      }
+      return hitboxOn;
+    },
+    // the variant by index (null: just say which)
+    variant(i) {
+      if (i !== null && hitboxes[i]) {
+        variant = i;
+        setScale(hitboxes[i].scale ?? 1, false);
+        drawHitbox();
+      }
+      return variant;
     },
   };
   const menu = info.menu || (names.length > 1 ? [{ title: "Clips", hide_weapon: false, clips: names.map((n) => ({ clip: n, label: n, then: "loop" })) }] : []);
+  if (hitboxes.length) { setScale(hitboxes[variant].scale ?? 1, true); drawHitbox(); }
   if (options.controls) ui = picker(options.controls, menu, info.iconUrl, on, hitboxes);
 
   if (anim.first) await anim.idle();

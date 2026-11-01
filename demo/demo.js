@@ -8,6 +8,7 @@ import { mountModel, packClipUrl } from "../src/model-viewer.js";
 import { mountArea } from "../src/area-viewer.js";
 import { World, createFiles } from "../src/world.js";
 import { tileKey, areaTiles } from "../src/jobs.js";
+import { ItemList } from "./item-list.js";
 
 const DROP = "https://dropped.invalid/";
 const $ = (id) => document.getElementById(id);
@@ -68,10 +69,18 @@ async function hitboxesFor(url) {
   }));
 }
 
+// Whether the hitbox shows: kept from model to model, and over reloads.
+let hitboxOn = false;
+try { hitboxOn = localStorage.getItem("ff-three-demo-hitbox") === "1"; } catch { /* no storage */ }
+const keepHitbox = (v) => {
+  hitboxOn = v;
+  try { localStorage.setItem("ff-three-demo-hitbox", v ? "1" : "0"); } catch { /* no storage */ }
+};
+
 const modelItem = (label, url, clips) => ({
   label, title: url, key: `model:${url}`, query: `model=${encodeURIComponent(url)}${clips === "pack" ? "&clips=pack" : ""}`,
   open: async () => mountModel(stage, url, {
-    controls, hitbox: await hitboxesFor(url),
+    controls, hitbox: await hitboxesFor(url), hitboxOn, onHitbox: keepHitbox,
     ...(clips === "pack" ? { clipUrl: (name) => packClipUrl(url, name) } : {}),
   }),
 });
@@ -121,6 +130,7 @@ function addModel(m) {
       ? modelItem(m.names.slice(0, 3).join(", ") + (m.names.length > 3 ? ` +${m.names.length - 3}` : ""), m.url, m.clips)
       : modelItem(named(label), m.url, m.clips);
     item.folder = named(label);
+    item.icon = m.icon || null;
     item.search = `${item.label} ${(m.names || []).join(" ")} ${item.folder}`.toLowerCase();
     add(source, kind, item);
     return;
@@ -141,7 +151,7 @@ const KIND_ORDER = ["Areas", "Tiles", "Nanos", "Fusions", "Mobs", "NPCs", "Other
 const kindRank = (k) => { const i = KIND_ORDER.indexOf(k); return i < 0 ? (k.startsWith("Wear") ? 50 : 60) : i; };
 
 // ---------------------------------------------------------------- the dropdowns
-const sourceSel = $("source"), kindSel = $("kind"), itemSel = $("item"), filter = $("filter");
+const sourceSel = $("source"), kindSel = $("kind"), itemSel = new ItemList($("item"), "Item"), filter = $("filter");
 const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
 
 function fillKinds() {
@@ -155,8 +165,8 @@ function fillItems() {
   const items = (sources.get(sourceSel.value) || new Map()).get(kindSel.value) || [];
   const q = filter.value.trim().toLowerCase();
   const shown = items.map((it, i) => [it, i]).filter(([it]) => !q || (it.search || it.label.toLowerCase()).includes(q));
-  itemSel.replaceChildren(option("", shown.length ? `Pick one of ${shown.length}…` : "Nothing matches"),
-    ...shown.map(([it, i]) => option(i, it.label)));
+  itemSel.setOptions(shown.length ? `Pick one of ${shown.length}…` : "Nothing matches",
+    shown.map(([it, i]) => ({ value: String(i), label: it.label, icon: it.icon || null, title: it.title })));
 }
 
 function refresh() {

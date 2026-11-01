@@ -20,16 +20,22 @@ const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { retu
 // metres, x east, y north).
 export const areaOf = (a) => [Math.floor(a.x / 512), Math.floor(a.y / 512), Math.ceil((a.x + a.width) / 512) - 1, Math.ceil((a.y + a.height) / 512) - 1];
 
-// The in-game names of the models a sub-pack's tables.json names
+// The client's icon files by m_iIconType (AvatarUtil): <prefix>_<number, two digits>.png
+export const ICON_PREFIXES = ["wpnicon", "nanoicon", "skillicon", "cosicon", "npcicon", "nanoready", "questitemicon",
+  "generalitemicon", "mobicon", "fusionicon", "hnpcicon", "transport", "vehicle"];
+
+// The in-game names and icons of the models a sub-pack's tables.json names
 // (ff-unpack copies the client's XDT tables): Map of "<model folder>" and
-// "<model folder>/<variant>" (lower case) → [names], in table order. Every
+// "<model folder>/<variant>" (lower case) → { names, icon }: the names in
+// table order, the icon file of the first row with one. Every
 // table works the same way: a row's m_iMesh picks a mesh row, whose
 // m_pstrMMeshModelString (and m_pstrFMeshModelString) is the model's
 // folder and whose m_pstrMTextureString names the variant (or, where it
 // has none, the row its m_iTexture picks: ff-unpack names a variant's file
 // after its first texture); and
 // its m_i…Name (m_iNpcName, m_iNanoName, m_iItemName, …) a string row,
-// whose m_strName is its name.
+// whose m_strName is its name; its m_iIcon1 (items: m_iIcon) picks an icon
+// row, { m_iIconNumber, m_iIconType }, naming its icon file.
 export function packNames(tables) {
   const names = new Map();
   for (const table of Object.values(tables || {})) {
@@ -37,6 +43,7 @@ export function packNames(tables) {
     const data = lists.find(([k]) => k.endsWith("Data") && !/Mesh|String/.test(k));
     const meshes = (lists.find(([k]) => k.endsWith("MeshData")) || [])[1];
     const strings = (lists.find(([k]) => k.endsWith("StringData")) || [])[1];
+    const icons = (lists.find(([k]) => k.endsWith("IconData")) || [])[1] || [];
     if (!data || !meshes || !strings) continue;
     for (const row of data[1]) {
       const nameKey = Object.keys(row).find((k) => /^m_i\w*Name$/.test(k));
@@ -46,9 +53,14 @@ export function packNames(tables) {
       const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
       const tex = (mesh.m_pstrMTextureString && mesh.m_pstrMTextureString !== "null" && mesh.m_pstrMTextureString)
         || (texRow && texRow.m_pstrMTextureString);
+      const iconRow = icons[row.m_iIcon1 ?? row.m_iIcon];
+      const prefix = iconRow && (row.m_iIcon1 ?? row.m_iIcon) ? ICON_PREFIXES[iconRow.m_iIconType] : null;
+      const icon = prefix ? `${prefix}_${String(iconRow.m_iIconNumber).padStart(2, "0")}.png` : null;
       const add = (key) => {
-        if (!names.has(key)) names.set(key, []);
-        if (!names.get(key).includes(name)) names.get(key).push(name);
+        if (!names.has(key)) names.set(key, { names: [], icon: null });
+        const entry = names.get(key);
+        if (!entry.names.includes(name)) entry.names.push(name);
+        if (!entry.icon && icon) entry.icon = icon;
       };
       for (const model of [mesh.m_pstrMMeshModelString, mesh.m_pstrFMeshModelString]) {
         if (!model || model === "null") continue;
@@ -62,10 +74,11 @@ export function packNames(tables) {
 
 // What a directory holds, for the demo page: { worlds: [{ url, tiles,
 // areas: [{ name, zone, area }] }], models: [{ url, group, name, clips,
-// names }] }, URLs under `prefix`. `clips` is "pack" for a prefab in an
-// ff-unpack pack, whose folder is part of its `name` and whose category
-// folder is its `group`; `names` are its in-game names, where the pack's
-// tables.json has them (packNames()).
+// names, icon }] }, URLs under `prefix`. `clips` is "pack" for a prefab in
+// an ff-unpack pack, whose folder is part of its `name` and whose category
+// folder is its `group`; `names` are its in-game names and `icon` the URL of
+// its icon, where the pack's tables.json has them (packNames()) and its
+// icons/ the file.
 export function indexFiles(root, prefix = "/files/") {
   const worlds = [], models = [];
   const url = (rel) => prefix + rel.split(path.sep).map(encodeURIComponent).join("/");
@@ -118,7 +131,12 @@ export function indexFiles(root, prefix = "/files/") {
       // the variant's own names, else the model's
       const folder = parts[parts.length - 1].toLowerCase(), variant = n.slice(0, -4).toLowerCase();
       const known = inPack ? namesOf(packRoot).get(`${folder}/${variant}`) || namesOf(packRoot).get(folder) : null;
-      if (known) entry.names = known;
+      if (known) {
+        entry.names = known.names;
+        // the pack's icons/ sits beside its sub-packs
+        const iconRel = known.icon && path.join(packRoot, "..", "icons", known.icon);
+        if (iconRel && fs.existsSync(path.join(root, iconRel))) entry.icon = url(path.normalize(iconRel));
+      }
       models.push(entry);
     }
   };

@@ -13,9 +13,9 @@ test("an NPC's hitbox is a cylinder on its origin, its row's size", () => {
   assert.deepEqual(bounds(hitboxObject({ radius: 1.7, height: 4.5 })), [-1.7, 0, -1.7, 1.7, 4.5, 1.7]);
 });
 
-test("the hitbox doesn't grow with the model's scale, so it's drawn divided by it", () => {
-  // a model drawn at ×1 that the game shows at ×2: its 1 m hitbox is half as big beside it
-  assert.deepEqual(bounds(hitboxObject({ radius: 1, height: 2, scale: 2 })), [-0.5, 0, -0.5, 0.5, 1, 0.5]);
+test("the hitbox keeps its size whatever the model's scale", () => {
+  // the viewer scales the model by m_fScale; the hitbox is the game's, in metres
+  assert.deepEqual(bounds(hitboxObject({ radius: 1, height: 2, scale: 2 })), [-1, 0, -1, 1, 2, 1]);
 });
 
 test("a player's is the 0.3 × 1.6 m capsule", () => {

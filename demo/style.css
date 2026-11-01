@@ -25,6 +25,16 @@ header p { margin: 0 0 16px; color: var(--muted); }
 .picker label { display: flex; align-items: center; gap: 6px; }
 .picker .grow { flex: 1 1 260px; }
 .picker .grow select { flex: 1; min-width: 0; }
+.picker .field { display: flex; align-items: center; gap: 6px; }
+/* the item list (demo/item-list.js): a button and a listbox with icons */
+.ff-list { position: relative; flex: 1; min-width: 0; }
+.ff-list-button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; }
+.ff-list-button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-list-box { position: absolute; z-index: 10; top: calc(100% + 2px); left: 0; right: 0; max-height: min(60vh, 420px); overflow: auto;
+  margin: 0; padding: 4px 0; list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / .25); }
+.ff-list-box li { display: flex; align-items: center; gap: 8px; padding: 3px 8px; cursor: pointer; }
+.ff-list-box li.active, .ff-list-box li:hover { background: var(--sunk); }
+.ff-list-icon { flex: none; width: 24px; height: 24px; object-fit: contain; }
 .picker select { max-width: 100%; }
 .picker input { width: 160px; max-width: 100%; }
 .drop { margin-top: 16px; }
