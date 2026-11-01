@@ -28,8 +28,10 @@ export const ICON_PREFIXES = ["wpnicon", "nanoicon", "skillicon", "cosicon", "np
 // (ff-unpack copies the client's XDT tables): Map of "<model folder>" and
 // "<model folder>/<variant>" (lower case) → { names, icon, npcs }: the
 // names in table order, the icon file of the first row with one, and, for
-// the NPC table, each NPC row's { id, name, level, icon, radius, height,
-// scale } (m_iRadius and m_iHeight in metres, m_fScale the model's). Every
+// the NPC table, each NPC row's { id, name, level, style, icon, radius,
+// height, scale } (style: a mob's m_iNpcStyle, 0 Adaptium, 1 Blastons,
+// 2 Cosmix, null for friendly NPCs (m_iTeam 1); m_iRadius and m_iHeight in
+// metres, m_fScale the model's). Every
 // table works the same way: a row's m_iMesh picks a mesh row, whose
 // m_pstrMMeshModelString (and m_pstrFMeshModelString) is the model's
 // folder and whose m_pstrMTextureString names the variant (or, where it
@@ -54,7 +56,7 @@ export function packNames(tables) {
       if (name === "null") name = null;
       // NPCs have sizes (and are listed by number where the tables have no names)
       const npc = row.m_iRadius ? { id: row.m_iNpcNumber, name: name || `NPC ${row.m_iNpcNumber}`, level: row.m_iNpcLevel ?? null,
-        icon: null, radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 } : null;
+        style: row.m_iTeam === 2 && row.m_iNpcStyle != null ? row.m_iNpcStyle : null, icon: null, radius: row.m_iRadius / 100, height: row.m_iHeight / 100, scale: row.m_fScale || 1 } : null;
       if (!mesh || !(name || npc)) continue;
       const texRow = row.m_iTexture ? meshes[row.m_iTexture] : null;
       const tex = (mesh.m_pstrMTextureString && mesh.m_pstrMTextureString !== "null" && mesh.m_pstrMTextureString)

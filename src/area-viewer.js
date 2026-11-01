@@ -162,6 +162,7 @@ export async function mountArea(stage, world, spec, { controls = null, pitch = 2
       if (sky) for (const m of sky.material) m.uniforms.map.value.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
+      renderer.domElement.remove(); // a lost context draws a broken-image icon
       renderer.domElement.remove();
       world.files.forget();
     },

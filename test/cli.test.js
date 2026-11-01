@@ -87,11 +87,11 @@ test("the demo server lists models and worlds with their named areas", async () 
     { name: "Orchid Bay", zone: "Downtown", x: 2048, y: 1024, width: 512, height: 512 },
     { name: "Elsewhere", zone: "Nowhere", x: 7680, y: 7680, width: 512, height: 512 },
   ]));
-  // the client's tables: NPCs 1 and 2 use the drum (2 bigger, with no icon), hat 1 and 2 the same model in two textures
+  // the client's tables: NPCs 1 and 2 use the drum (1 a Blastons mob, 2 a bigger friendly NPC with no icon), hat 1 and 2 the same model in two textures
   put("pack/models/tables.json", JSON.stringify({ m_pNpcTable: {
     m_pNpcData: [{},
-      { m_iNpcNumber: 1, m_iNpcName: 1, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 3, m_iRadius: 60, m_iHeight: 250, m_fScale: 1, m_iIcon1: 1 },
-      { m_iNpcNumber: 2, m_iNpcName: 2, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 9, m_iRadius: 90, m_iHeight: 375, m_fScale: 1.5, m_iIcon1: 0 }],
+      { m_iNpcNumber: 1, m_iNpcName: 1, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 3, m_iTeam: 2, m_iNpcStyle: 1, m_iRadius: 60, m_iHeight: 250, m_fScale: 1, m_iIcon1: 1 },
+      { m_iNpcNumber: 2, m_iNpcName: 2, m_iMesh: 1, m_iTexture: 0, m_iNpcLevel: 9, m_iTeam: 1, m_iNpcStyle: 0, m_iRadius: 90, m_iHeight: 375, m_fScale: 1.5, m_iIcon1: 0 }],
     m_pNpcMeshData: [{}, { m_pstrMMeshModelString: "drum", m_pstrMTextureString: "drum" }],
     m_pNpcStringData: [{}, { m_strName: "Barrel Buster" }, { m_strName: "Giant Barrel Buster" }],
     m_pNpcIconData: [{}, { m_iIconNumber: 5, m_iIconType: 8 }],
@@ -115,8 +115,8 @@ test("the demo server lists models and worlds with their named areas", async () 
   assert.equal(drum.icon, "/files/pack/icons/mobicon_05.png");
   // the NPCs that use it, with their sizes in metres, for the hitbox and the variants
   assert.deepEqual(drum.npcs, [
-    { id: 1, name: "Barrel Buster", level: 3, icon: "/files/pack/icons/mobicon_05.png", radius: 0.6, height: 2.5, scale: 1 },
-    { id: 2, name: "Giant Barrel Buster", level: 9, icon: null, radius: 0.9, height: 3.75, scale: 1.5 },
+    { id: 1, name: "Barrel Buster", level: 3, style: 1, icon: "/files/pack/icons/mobicon_05.png", radius: 0.6, height: 2.5, scale: 1 },
+    { id: 2, name: "Giant Barrel Buster", level: 9, style: null, icon: null, radius: 0.9, height: 3.75, scale: 1.5 },
   ]);
   assert.equal(index.worlds.length, 1);
   assert.equal(index.worlds[0].url, "/files/pack/world/");

@@ -471,6 +471,7 @@ export async function mountModel(stage, url, options = {}) {
       for (const p of gltf.parser.associations.keys()) if (p && p.isTexture) p.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
+      renderer.domElement.remove(); // a lost context draws a broken-image icon
     },
   };
 }

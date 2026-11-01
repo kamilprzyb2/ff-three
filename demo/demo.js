@@ -59,6 +59,10 @@ function sizesOf(npcs) {
   return [...sizes.values()].sort((a, b) => a.scale - b.scale || a.radius - b.radius || a.height - b.height);
 }
 const num = (v) => String(+v.toFixed(2));
+// a mob's type (m_iNpcStyle), whose nanos it's weak or strong against
+const STYLES = ["Adaptium", "Blastons", "Cosmix"];
+const styleChip = (n) => (STYLES[n.style]
+  ? [el("span", { className: `style style-${"abc"[n.style]}`, textContent: STYLES[n.style][0], title: STYLES[n.style] })] : []);
 const el = (tag, props = {}, children = []) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
 const chips = (s) => [
   el("span", { className: "chip", textContent: `model ×${num(s.scale)}`, title: "The model's scale (m_fScale)" }),
@@ -76,7 +80,8 @@ function clearVariants() {
 }
 function showVariants(item, viewer, sizes, npcId) {
   const showLabel = (n, s) => {
-    label.replaceChildren(el("strong", { textContent: n.name }), ...(n.level != null ? [el("span", { textContent: `Lv ${n.level}` })] : []), ...chips(s));
+    label.replaceChildren(el("strong", { textContent: n.name }), ...(n.level != null ? [el("span", { textContent: `Lv ${n.level}` })] : []),
+      ...(STYLES[n.style] ? [el("span", { textContent: STYLES[n.style] })] : []), ...chips(s));
     label.hidden = false;
   };
   const buttons = [];
@@ -92,6 +97,7 @@ function showVariants(item, viewer, sizes, npcId) {
       const b = el("button", { type: "button", title: `NPC ${n.id}` }, [
         n.icon ? el("img", { src: n.icon, alt: "", loading: "lazy", decoding: "async" }) : el("span", { className: "noicon" }),
         el("span", { className: "name", textContent: n.name }),
+        ...styleChip(n),
         ...(n.level != null ? [el("span", { className: "level", textContent: `Lv ${n.level}` })] : []),
       ]);
       b.setAttribute("aria-pressed", String(n.id === npcId));
