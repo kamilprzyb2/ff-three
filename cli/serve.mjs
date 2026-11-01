@@ -2,7 +2,7 @@
 // Serves the demo page (at /demo/) and, with --dir, a directory of
 // UnityPackFF output or ff-unpack packs at /files/. The demo page lists what
 // it finds there (/demo/files.json): every model, and every world directory
-// with its named areas (from the pack's base/areas.json).
+// with its named areas (from the pack's areas/areas.json).
 //   node cli/serve.mjs [--dir <dir>] [--port 8080] [--host 127.0.0.1]
 import fs from "node:fs";
 import path from "node:path";
@@ -40,7 +40,7 @@ export function indexFiles(root, prefix = "/files/") {
         // an area made of several rectangles (Orchid Bay has four) is one
         // link, over the tiles of all of them
         const byName = new Map();
-        for (const a of JSON.parse(fs.readFileSync(path.join(dir, "..", "base", "areas.json"), "utf8"))) {
+        for (const a of JSON.parse(fs.readFileSync(path.join(dir, "..", "areas", "areas.json"), "utf8"))) {
           const r = areaOf(a), key = `${a.zone}\n${a.name}`;
           const have = byName.get(key);
           byName.set(key, { name: a.name, zone: a.zone, area: have
@@ -55,7 +55,8 @@ export function indexFiles(root, prefix = "/files/") {
     const hasClips = names.includes("clips") && isDir(path.join(dir, "clips"));
     for (const n of names) {
       const p = path.join(dir, n), r = rel ? path.join(rel, n) : n;
-      if (isDir(p)) { if (!SKIP.has(n)) walk(p, r, depth + 1, packRoot); continue; }
+      // hidden folders: ff-unpack's sub-packs while they're being written, and the like
+      if (isDir(p)) { if (!SKIP.has(n) && !n.startsWith(".")) walk(p, r, depth + 1, packRoot); continue; }
       if (!n.toLowerCase().endsWith(".glb") || n.includes("@")) continue; // split clips go with their model
       const parts = rel.split(path.sep);
       const inPack = packRoot != null && parts.length - (packRoot ? packRoot.split(path.sep).length : 0) >= 2;

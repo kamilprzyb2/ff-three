@@ -81,7 +81,8 @@ test("the demo server lists models and worlds with their named areas", async () 
   put("pack/models/manifest.json", "{}"); put("pack/models/mob/drum/drum.glb"); put("pack/models/mob/drum/clips/run.glb"); put("pack/models/shared/abc.bin");
   put("pack/avatar/manifest.json", "{}"); put("pack/avatar/wear/hat/hat.glb");
   put("pack/world/tile/04_02.glb"); put("pack/world/tile/03_01.glb"); put("pack/world/shared/x.png");
-  put("pack/base/areas.json", JSON.stringify([
+  put("pack/.world-staging/world/tile/04_02.glb"); // a sub-pack being written: hidden, left out
+  put("pack/areas/areas.json", JSON.stringify([
     { name: "Orchid Bay", zone: "Downtown", x: 1536, y: 512, width: 512, height: 512 },
     { name: "Orchid Bay", zone: "Downtown", x: 2048, y: 1024, width: 512, height: 512 },
     { name: "Elsewhere", zone: "Nowhere", x: 7680, y: 7680, width: 512, height: 512 },
